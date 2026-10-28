@@ -222,7 +222,7 @@ def _no_op(*args, **kwargs) -> None:
     return None
 
 
-cp_attention = eager_on_graph(_cp_attention)
+cp_attention = eager_on_graph(_cp_attention, capture_stub=_no_op)
 
 
 def _engram_lookup(engram, x, hash_ids, input_ids, out) -> None:
@@ -233,7 +233,7 @@ def _engram_lookup(engram, x, hash_ids, input_ids, out) -> None:
     )
 
 
-engram_lookup = eager_on_graph(_engram_lookup)
+engram_lookup = eager_on_graph(_engram_lookup, capture_stub=_no_op)
 
 
 def _write_dspark_aux(residual, tail, packer) -> None:
@@ -247,7 +247,7 @@ def _dspark_aux(residual, use_tail_rows: bool) -> None:
     _write_dspark_aux(residual, _live.tail if use_tail_rows else None, _live.packer)
 
 
-dspark_aux = eager_on_graph(_dspark_aux)
+dspark_aux = eager_on_graph(_dspark_aux, capture_stub=_no_op)
 
 
 # ---------------------------------------------------------------------------

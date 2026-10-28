@@ -334,13 +334,40 @@ def _fp8_gather_cols(hidden: int) -> int:
 def _shared_gate_up_takes_prequant(mlp, rows: int) -> bool:
     """Whether the TP-sharded shared expert's gate_up GEMM, run on blocks of ``rows``
     and ``2 * rows`` gathered rows, takes their block32 ue8m0 quant (row-major
-    scales) to the GEMM its bf16 input would take.
+    scales) to the GEMM its bf16 input would take: the SM90 block32 routes put
+    neither row count on the swap-AB or Triton GEMM, so both are DeepGEMM."""
+    from sglang.kernels.ops.gemm.fp8_block32_swapab import lookup_swapab
+    from sglang.srt.layers.quantization.fp8 import (
+        Fp8Config,
+        Fp8LinearMethod,
+        _dsv41_block32_routes,
+    )
+    from sglang.srt.layers.quantization.fp8_utils import (
+        _deepgemm_block_fp8_supported,
+    )
 
-    Always False on this tree: the answer needs the antgroup block32 route
-    tables (fp8_block32_swapab + _dsv41_block32_routes, skipped in this port),
-    so the fp8 gather falls back to moving the bf16 rows; bitwise, more bytes.
-    """
-    return False
+    gate_up = mlp.shared_experts.gate_up_proj
+    method = gate_up.quant_method
+    if not (
+        isinstance(method, Fp8LinearMethod)
+        and isinstance(method.quant_config, Fp8Config)
+        and method.block_quant
+        and not method.use_mxfp8
+        and not method.block_fp8_as_mxfp8
+        and list(method.weight_block_size) == [32, 32]
+        and method.quant_config.scale_fmt == "ue8m0"
+    ):
+        return False
+    routes = _dsv41_block32_routes(weight_block_size=[32, 32], act_scale_ue8m0=True)
+    n, k = gate_up.weight.shape
+    return (
+        routes is not None
+        and _deepgemm_block_fp8_supported((n, k), [32, 32], torch.bfloat16)
+        and all(
+            m > routes.triton_max_m and lookup_swapab(routes.swapab, n, k, m) is None
+            for m in (rows, 2 * rows)
+        )
+        )
 
 
 def _start_fp8_gather(

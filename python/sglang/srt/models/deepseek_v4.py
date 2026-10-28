@@ -223,6 +223,15 @@ from sglang.srt.models.deepseek_v4_cp_prefill import (
     start_cp_compressor_gather,
     start_cp_kv_gather,
 )
+from sglang.srt.models.deepseek_v4_cp_prefill import (
+    CpMoeSymmTransport,
+    bind_cp_moe_symm_transport,
+    cp_local_router_supported,
+    cp_moe_symm_supported,
+    cp_shard_input_embeds,
+    start_cp_compressor_gather,
+    start_cp_kv_gather,
+)
 from sglang.srt.models.deepseek_v4_mhc import MHC_POST_MULT_VALUE
 from sglang.srt.models.deepseek_v4_platform_stage import (
     NonCudaDecoderMixin,

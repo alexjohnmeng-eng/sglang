@@ -4008,6 +4008,18 @@ class DeepseekV4AttnBackend(
             and forward_batch.forward_mode.is_extend()
         )
 
+    def cp_low_ratio_compressor_runs(self, layer, forward_batch: ForwardBatch) -> bool:
+        """Whether forward_low_ratio_sources runs ``layer``'s compressor on the CP
+        path, over the projections of every CP row."""
+        return (
+            layer.compressor is not None
+            and not forward_batch.forward_mode.is_idle()
+            and not forward_batch.encoder_swa_replay
+            and layer.layer_id != self.tail_source_kv_layer_id
+            and dsa_use_prefill_cp(forward_batch)
+            and forward_batch.forward_mode.is_extend()
+        )
+
     def _forward_low_ratio_sources_cp(
         self,
         *,
