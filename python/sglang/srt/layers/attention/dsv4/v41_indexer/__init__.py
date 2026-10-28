@@ -104,7 +104,12 @@ def make_full_topk_indexer(
         and index_heads in (32, 64)
         and index_topk in (512, 1024, 2048)
     )
-    return FullTopKIndexer(
+    from sglang.srt.layers.dsv41_sm90 import dsv41_sm90_on
+
+    indexer_cls = FullTopKIndexer
+    if dsv41_sm90_on("indexer"):
+        from .sm90 import Sm90FullTopKIndexer as indexer_cls
+    return indexer_cls(
         token_to_kv_pool=token_to_kv_pool,
         req_to_token=req_to_token,
         use_deep_gemm_prefill=_use_deep_gemm_prefill() or _use_sm90_prefill_scores(),
@@ -121,12 +126,16 @@ def make_candidate_indexer(
     candidate_topk_blocks: int,
     candidate_block_size: int,
 ) -> Tuple[PrefillCandidates, DecodeCandidates]:
+    from sglang.srt.layers.dsv41_sm90 import dsv41_sm90_on
     from sglang.srt.runtime_context import get_parallel
 
     from .dense_blocks import DenseBlocksBackend
 
+    dense_blocks_cls = DenseBlocksBackend
+    if dsv41_sm90_on("indexer"):
+        from .sm90 import Sm90DenseBlocksBackend as dense_blocks_cls
     use_deep_gemm_prefill = _use_deep_gemm_prefill()
-    dense_blocks = DenseBlocksBackend(
+    dense_blocks = dense_blocks_cls(
         token_to_kv_pool=token_to_kv_pool,
         req_to_token=req_to_token,
         candidate_topk_blocks=candidate_topk_blocks,

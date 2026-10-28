@@ -32,6 +32,19 @@ def _jit_topk_v1_module():
 
 @cache_once
 def _jit_topk_v2_module(deterministic: bool = False, bf16_scores: bool = False):
+    return _load_topk_v2_module(
+        deterministic=deterministic, bf16_scores=bf16_scores, det_ties=False
+    )
+
+
+@cache_once
+def _jit_topk_v2_det_ties_module():
+    return _load_topk_v2_module(det_ties=True)
+
+
+def _load_topk_v2_module(
+    *, deterministic: bool = False, bf16_scores: bool = False, det_ties: bool = False
+):
     from sglang.kernels.jit.utils.occupancy import (
         NoSchedulableClustersError,
         get_max_active_clusters,
@@ -73,9 +86,12 @@ def _jit_topk_v2_module(deterministic: bool = False, bf16_scores: bool = False):
         ("topk_transform_kpool", f"{kernel}::transform_kpool"),
         ("topk_transform_kpool_ragged", f"{kernel}::transform_kpool_ragged"),
     ]
+    if det_ties:
+        extra_cuda_cflags.append("-DSGL_TOPK_DET_TIES=1")
+    markers = ["det_ties", *args] if det_ties else args
     return load_jit(
         make_name("topk_v2"),
-        *args,
+        *markers,
         f"mode{mode}" + ("_bf16" if bf16_scores else ""),
         extra_cuda_cflags=extra_cuda_cflags,
         cuda_files=["deepseek_v4/topk_v2.cuh"],
@@ -191,6 +207,7 @@ def topk_transform_ragged_v2(
     out_indices: torch.Tensor,
     row_starts: Optional[torch.Tensor] = None,
     deterministic: bool = False,
+    det_ties: bool = False,
 ) -> None:
     """Ragged (prefill) fused top-k for a contiguous-KV score matrix.
 
@@ -207,6 +224,8 @@ def topk_transform_ragged_v2(
     row's window that the 16-byte-aligned read base pulls in are masked out.
     They are invalid for that row and the buffer must have no other consumer.
     ``seq_lens`` entries must be NON-NEGATIVE, as for the paged entry point.
+    ``det_ties`` (CUDA) keeps the lowest positions among exact copies of the
+    k-th score instead of an arrival-order subset.
     """
     if is_xpu():
         torch.ops.sgl_kernel.topk_transform_ragged(
@@ -217,7 +236,11 @@ def topk_transform_ragged_v2(
             row_starts,
         )
         return
-    module = _jit_topk_v2_module(deterministic, scores.dtype == torch.bfloat16)
+    module = (
+        _jit_topk_v2_det_ties_module()
+        if det_ties
+        else _jit_topk_v2_module(deterministic, scores.dtype == torch.bfloat16)
+    )
     module.topk_transform_ragged(scores, seq_lens, row_starts, out_offsets, out_indices)
 
 
@@ -334,6 +357,7 @@ def topk_transform_paged_v2(
     out_raw_indices: Optional[torch.Tensor] = None,
     *,
     deterministic: bool = False,
+    det_ties: bool = False,
 ) -> None:
     """Fused top-k + optional page-table transform (DeepSeek-V4 top-k v2 kernel).
 
@@ -361,6 +385,7 @@ def topk_transform_paged_v2(
     (``SGLANG_TOPK_V2_MODE``): then the smallest indices do (the merge of the
     DSA decode context-parallel top-k relies on it). The same holds for
     the candidates and packed entry points.
+    ``det_ties`` keeps the lowest positions among exact copies of the k-th score.
     """
     if is_xpu():
         if out_raw_indices is not None:
@@ -382,7 +407,11 @@ def topk_transform_paged_v2(
             metadata,
         )
         return
-    module = _jit_topk_v2_module(deterministic)
+    module = (
+        _jit_topk_v2_det_ties_module()
+        if det_ties
+        else _jit_topk_v2_module(deterministic)
+    )
     module.topk_transform_paged(
         scores,
         seq_lens,
