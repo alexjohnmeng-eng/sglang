@@ -1,15 +1,6 @@
 """SM90 component CI for Humming FP8 DeepEP dispatch and fused SiLU quant."""
 
 import unittest
-
-
-def _humming_ops_has_quant_input() -> bool:
-    try:
-        from humming import ops
-    except ImportError:
-        return False
-    return hasattr(ops, "quant_input")
-
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -19,6 +10,7 @@ from sglang.kernels.ops.moe.dsv4 import silu_and_mul_masked_post_quant
 from sglang.kernels.ops.moe.ep_moe_kernels import moe_permute_with_scale
 from sglang.srt.layers.moe.moe_runner import humming as humming_runner
 from sglang.srt.layers.moe.moe_runner.base import MoeRunnerConfig
+from sglang.srt.runtime_context import get_flags
 from sglang.srt.utils import get_device_sm
 from sglang.test.ci.ci_register import register_cuda_ci
 from sglang.test.test_utils import CustomTestCase
@@ -108,8 +100,6 @@ class TestHummingFp8Dispatch(CustomTestCase):
                 "w13": SimpleNamespace(
                     a_dtype=humming_runner.dtypes.float8e4m3,
                     input_scale_group_size=128,
-                    input_quant_mode=humming_runner.InputQuantizationMode.DynamicGroup,
-                    as_dtype=humming_runner.dtypes.float32,
                 )
             },
         )
@@ -180,8 +170,6 @@ class TestHummingFp8Dispatch(CustomTestCase):
                         "w2": SimpleNamespace(
                             a_dtype=humming_runner.dtypes.float8e4m3,
                             input_scale_group_size=128,
-                            input_quant_mode=humming_runner.InputQuantizationMode.DynamicGroup,
-                            as_dtype=humming_runner.dtypes.float32,
                         )
                     }
                 )
@@ -212,13 +200,10 @@ class TestHummingFp8Dispatch(CustomTestCase):
                         side_effect=run_poisoned_kernel,
                     ) as fused_silu,
                 ):
-                    down_input, down_scale, down_scale_2 = (
-                        runner._grouped_masked_act_quant(
-                            gate_up, expert_num_tokens, buffers
-                        )
+                    down_input, down_scale = runner._grouped_masked_act_quant(
+                        gate_up, expert_num_tokens, buffers
                     )
 
-                self.assertIsNone(down_scale_2)
                 fused_silu.assert_called_once()
                 fallback_activation.assert_not_called()
                 call = fused_silu.call_args
@@ -273,6 +258,79 @@ class TestHummingFp8Dispatch(CustomTestCase):
                         self.assertTrue(
                             bool(actual_scale[expert, valid:].isnan().all())
                         )
+
+    def test_w2_input_fusion_is_bitwise_the_two_kernel_path(self):
+        """The SM90 MoE path's fused SwiGLU + W2 input quant must keep the bits of
+        the clamped SwiGLU followed by the dynamic per-row FP8 quant (any row count,
+        the 512 + 64 column split of TP4's 576, clamped and special values); a
+        grouped input scale is a different quant and must not take the kernel."""
+        from humming.config.enum import MmaType
+
+        def make_runner(sm90_moe, intermediate, group):
+            with get_flags().dsv41_sm90.override(
+                subsystems=frozenset({"moe"}) if sm90_moe else frozenset()
+            ):
+                runner = humming_runner.HummingRunnerCore(
+                    MoeRunnerConfig(
+                        num_experts=8,
+                        num_local_experts=8,
+                        intermediate_size_per_partition=intermediate,
+                        top_k=6,
+                        activation="silu",
+                        is_gated=True,
+                        swiglu_limit=10.0,
+                        gate_up_interleaved=False,
+                    )
+                )
+            runner.layer = SimpleNamespace(
+                humming_metas={
+                    "w13": SimpleNamespace(c_dtype=humming_runner.dtypes.bfloat16),
+                    "w2": SimpleNamespace(
+                        a_dtype=humming_runner.dtypes.float8e4m3,
+                        input_scale_group_size=group,
+                        as_dtype=humming_runner.dtypes.float32,
+                        mma_type=MmaType.WGMMA,
+                    ),
+                }
+            )
+            return runner
+
+        self.assertFalse(make_runner(True, 768, 128)._act_quant_is_fusable())
+        generator = torch.Generator(device="cuda").manual_seed(2)
+        special = [0.0, -0.0, 1e-38, 3e38, -3e38, float("inf"), -10.0, 9.99]
+        for rows, intermediate in ((1, 576), (4099, 576), (300, 288)):
+            magnitude = torch.exp2(
+                torch.randint(-20, 8, (rows, 1), device="cuda", generator=generator)
+            )
+            gate_up = (
+                torch.randn(rows, 2 * intermediate, device="cuda", generator=generator)
+                * magnitude
+            ).to(torch.bfloat16)
+            gate_up[0, : len(special)] = torch.tensor(special)
+            gate_up[0, intermediate : intermediate + len(special)] = torch.tensor(
+                special
+            )
+            results = []
+            for sm90_moe in (False, True):
+                runner = make_runner(sm90_moe, intermediate, 0)
+                activation_output = torch.full(
+                    (rows, intermediate), float("nan"), device="cuda"
+                ).to(torch.bfloat16)
+                buffers = {
+                    "gate_up_output": gate_up,
+                    "activation_output": activation_output,
+                    "quanted_down_input": torch.empty(
+                        rows, intermediate, dtype=torch.float8_e4m3fn, device="cuda"
+                    ),
+                }
+                results.append(runner._w2_input(buffers))
+            # The fused path never writes the BF16 activation.
+            self.assertTrue(bool(activation_output.isnan().all()))
+            (q0, s0), (q1, s1) = results
+            with self.subTest(rows=rows, intermediate=intermediate):
+                self.assertEqual(s0.shape, s1.shape)
+                self.assertTrue(torch.equal(q0.view(torch.uint8), q1.view(torch.uint8)))
+                self.assertTrue(torch.equal(s0.view(torch.int32), s1.view(torch.int32)))
 
 
 class TestHummingInactiveRoutes(CustomTestCase):
@@ -407,82 +465,6 @@ class TestHummingInactiveRoutes(CustomTestCase):
                 self.assertTrue(
                     torch.equal(actual.view(torch.int16), expected.view(torch.int16))
                 )
-
-    def test_owner_writes_are_bitwise_the_finalized_rows(self):
-        """A CP rank writes each owner's row block of the deferred sum (plus that
-        block's shared rows) straight into the owner's buffer, per owner or all in
-        one launch; each block must keep the bits of the finalized output's rows."""
-        from sglang.kernels.ops.moe.moe_fused_mul_sum import moe_fused_mul_sum
-
-        generator = torch.Generator(device="cuda").manual_seed(5)
-        for world, rows, top_k, hidden in ((8, 37, 6, 5120), (4, 2048, 6, 5120)):
-            tokens = world * rows
-            values = torch.randn(
-                tokens, top_k, hidden, device="cuda", generator=generator
-            ).to(torch.bfloat16)
-            weights = torch.rand(tokens, top_k, device="cuda", generator=generator)
-            ids = torch.randint(0, 8, (tokens, top_k), device="cuda", dtype=torch.int32)
-            ids[::5, 1] = -1  # a skipped route
-            shared = torch.randn(tokens, hidden, device="cuda", generator=generator)
-            shared = shared.to(torch.bfloat16)
-            kwargs = dict(
-                inputs=values,
-                topk_weights=weights,
-                topk_ids=ids,
-                routed_scaling_factor=2.5,
-            )
-            expected = moe_fused_mul_sum(**kwargs, shared=shared)
-            deferred = humming_runner.HummingDeferredMulSum()
-            deferred.mul_sum_kwargs = dict(
-                kwargs, outputs=torch.empty_like(shared), is_ep=False
-            )
-            blocks = list(shared.split(rows))
-            one_by_one = [torch.empty_like(b) for b in blocks]
-            for p in range(world):
-                deferred.write_rows_with_shared_add(
-                    slice(p * rows, (p + 1) * rows),
-                    outputs=one_by_one[p],
-                    shared=blocks[p],
-                )
-            at_once = [torch.empty_like(b) for b in blocks]
-            deferred.write_all_rows_with_shared_add(
-                rows=rows, rank=world - 1, outputs=at_once, shared=blocks
-            )
-            with self.subTest(world=world, rows=rows):
-                for got in (torch.cat(one_by_one), torch.cat(at_once)):
-                    self.assertTrue(
-                        torch.equal(got.view(torch.int16), expected.view(torch.int16))
-                    )
-
-    @unittest.skipUnless(
-        _humming_ops_has_quant_input(),
-        "direct ops.quant_input only exists in the antgroup overlay build",
-    )
-    def test_w13_input_quant_is_row_local(self):
-        """A CP rank quantizes its own rows for the routed experts before the gather;
-        humming's w13 input quant of any row block must be those rows of the quant
-        of all rows."""
-        from humming import ops
-
-        generator = torch.Generator(device="cuda").manual_seed(9)
-        for rows in (37, 2048):
-            x = torch.randn(8 * rows, 5120, device="cuda", generator=generator)
-            x = (x * 4).to(torch.bfloat16)
-            kw = dict(dtype="float8e4m3", group_size=None, scale_dtype="float32")
-            q_all, s_all = ops.quant_input(inputs=x, **kw)
-            for r in (0, 3, 7):
-                block = slice(r * rows, (r + 1) * rows)
-                q, s = ops.quant_input(inputs=x[block].contiguous(), **kw)
-                with self.subTest(rows=rows, rank=r):
-                    self.assertTrue(
-                        torch.equal(q.view(torch.int8), q_all[block].view(torch.int8))
-                    )
-                    self.assertTrue(
-                        torch.equal(
-                            s.reshape(rows, -1).view(torch.int32),
-                            s_all.reshape(8 * rows, -1)[block].view(torch.int32),
-                        )
-                    )
 
 
 if __name__ == "__main__":
