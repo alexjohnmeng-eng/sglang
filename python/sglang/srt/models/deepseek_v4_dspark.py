@@ -17,6 +17,7 @@ from sglang.kernels.ops.attention.dsv4.wo_a import (
     can_use_fused_wo_a,
     fused_rope_wo_a_bf16,
 )
+from sglang.kernels.ops.quantization.fp8_block32_qdq import fp8_block32_quant_dequant
 from sglang.kernels.ops.speculative.dspark.dspark_draft_model import CommitKvProj
 from sglang.srt.configs.deepseek_v4 import DeepSeekV4Config
 from sglang.srt.configs.draft_parallel import DraftParallelSpec, DraftTPExecution
@@ -54,6 +55,7 @@ from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 from sglang.srt.model_executor.forward_context import get_token_to_kv_pool
 from sglang.srt.model_executor.runner import get_is_capture_mode
 from sglang.srt.model_loader.weight_utils import default_weight_loader
+from sglang.srt.models import deepseek_v4_attn_proj as dsv41_attn_proj
 from sglang.srt.models import deepseek_v4_boundary as hc_boundary
 from sglang.srt.models import deepseek_v4_mhc as mhc
 from sglang.srt.models.deepseek_common.utils import _is_cuda
@@ -214,13 +216,23 @@ class DSparkAttention(MqaAttentionBase):
                 # RoPE written straight into q_out (eps None: no norm), no copy.
                 fused_q_norm_rope(q, q_out, None, self.freqs_cis, positions)
                 return q_out
-            if not _is_npu:
-                fused_rope_inplace(
-                    q[..., -self.rope_head_dim :],
-                    None,
-                    self.freqs_cis,
-                    positions=positions,
-                )
+            if self._use_fast_kernel and not _is_npu:
+                if not (
+                    self.attn_proj is not None
+                    and dsv41_attn_proj.q_rope_rows(
+                        self.attn_proj,
+                        q=q,
+                        freqs_cis=self.freqs_cis,
+                        positions=positions,
+                        draft=True,
+                    )
+                ):
+                    fused_rope_inplace(
+                        q[..., -self.rope_head_dim :],
+                        None,
+                        self.freqs_cis,
+                        positions=positions,
+                    )
             else:
                 apply_rotary_emb(
                     q[..., -self.rope_head_dim :], self.freqs_cis[positions]
@@ -276,7 +288,6 @@ class DSparkAttention(MqaAttentionBase):
 
         pool = _resolve_dspark_pool()
         attn_backend = get_attn_backend()
-        rd = self.rope_head_dim
 
         enable_multi_stream = (
             self.alt_streams is not None
@@ -353,7 +364,40 @@ class DSparkAttention(MqaAttentionBase):
         ):
             return self._fused_rope_wo_a_wo_b(o, positions, defer_all_reduce)
 
-        if not _is_npu:
+        o = self._wo_a_input(o, positions)
+        wo_a = self.wo_a.weight.view(self.n_local_groups, self.o_lora_rank, -1)
+        if self._use_fast_kernel:
+            o = _apply_wo_a_bf16_matmul(
+                o,
+                wo_a,
+                is_decode=forward_batch.forward_mode.is_decode(),
+                is_target_verify=forward_batch.forward_mode.is_target_verify(),
+                fast_path=self.is_dsv41,
+            )
+        else:
+            o = torch.einsum("bgd,grd->bgr", o.float(), wo_a.float()).to(q.dtype)
+        value = o.reshape(o.shape[0], o.shape[1] * o.shape[2])
+        out, _ = self.wo_b(value, skip_all_reduce=defer_all_reduce)
+        return (
+            mhc.AttnOutput(out)
+            if _is_cuda and defer_all_reduce and self.attn_tp_size > 1
+            else out
+        )
+
+    def _wo_a_input(self, o: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
+        """o [T, H, Dh] -> the [T, G, H * Dh / G] wo_a input."""
+        rd = self.rope_head_dim
+        if self._use_fast_kernel and self.attn_proj is not None:
+            rows = dsv41_attn_proj.draft_wo_a_rope_qdq(
+                self.attn_proj,
+                o=o,
+                freqs_cis=self.freqs_cis,
+                positions=positions,
+                num_groups=self.n_local_groups,
+            )
+            if rows is not None:
+                return rows
+        if self._use_fast_kernel:
             fused_rope_inplace(
                 o[..., -rd:], None, self.freqs_cis, positions=positions, inverse=True
             )
@@ -381,24 +425,10 @@ class DSparkAttention(MqaAttentionBase):
             self.n_local_groups,
             o.shape[1] * o.shape[2] // self.n_local_groups,
         )
-        wo_a = self.wo_a.weight.view(self.n_local_groups, self.o_lora_rank, -1)
-        if not _is_npu:
-            o = _apply_wo_a_bf16_matmul(
-                o,
-                wo_a,
-                is_decode=forward_batch.forward_mode.is_decode(),
-                is_target_verify=forward_batch.forward_mode.is_target_verify(),
-                fast_path=self.is_dsv41,
-            )
-        else:
-            o = torch.einsum("bgd,grd->bgr", o.float(), wo_a.float()).to(q.dtype)
-        value = o.reshape(o.shape[0], o.shape[1] * o.shape[2])
-        out, _ = self.wo_b(value, skip_all_reduce=defer_all_reduce)
-        return (
-            mhc.AttnOutput(out)
-            if _is_cuda and defer_all_reduce and self.attn_tp_size > 1
-            else out
-        )
+        if self.attn_proj is not None:
+            # The V4.1 reference rounds the draft's wo_a input too.
+            o = fp8_block32_quant_dequant(o)
+        return o
 
     @functools.cached_property
     def _use_fused_wo_a(self) -> bool:

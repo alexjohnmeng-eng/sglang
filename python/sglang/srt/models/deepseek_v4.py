@@ -186,6 +186,7 @@ from sglang.srt.model_loader.weight_utils import (
     RUNAI_STREAMER_TENSOR_ATTR,
     default_weight_loader,
 )
+from sglang.srt.models import deepseek_v4_attn_proj as dsv41_attn_proj
 from sglang.srt.models import deepseek_v4_boundary as hc_boundary
 from sglang.srt.models import deepseek_v4_mhc as mhc
 from sglang.srt.models import deepseek_v4_prefill_graph as prefill_graph
@@ -1045,6 +1046,8 @@ class MqaAttentionBase(nn.Module):
     wo_a_fp8: bool = False
     wo_a_fp8_block128: bool = False
     use_mega_attention: bool = False
+    wo_a_fp8_block32: bool = False
+    attn_proj: Optional[dsv41_attn_proj.AttnProjPlan] = None
 
     def __init__(
         self,
@@ -1106,6 +1109,12 @@ class MqaAttentionBase(nn.Module):
         fp8: bool = (
             wo_a_fp8_gemm_enabled(quant_config) if wo_a_fp8 is None else wo_a_fp8
         )
+        # None keeps the upstream wo_a and RoPE kernels; an explicit wo_a_fp8
+        # (DSpark passes False) pins wo_a to bf16 there too.
+        self.attn_proj = dsv41_attn_proj.resolve_attn_proj(
+            quant_config=quant_config, fp8_wo_a_allowed=wo_a_fp8 is None
+        )
+        fp8_block32 = self.attn_proj is not None and self.attn_proj.wo_a_fp8_block32
         reduce_results: bool = (
             (self.attn_tp_size == get_parallel().tp_size and self.attn_tp_size > 1)
             if wo_b_reduce_results is None
@@ -1116,7 +1125,7 @@ class MqaAttentionBase(nn.Module):
         self.use_npu_arch35_mxfp8_wo_a = use_npu_arch35_mxfp8_wo_a(
             quant_config, wo_a_keeps_quant_config
         )
-        quantize_wo_a = fp8 or self.use_npu_arch35_mxfp8_wo_a
+        quantize_wo_a = fp8 or fp8_block32 or self.use_npu_arch35_mxfp8_wo_a
         if wo_a_keeps_quant_config is None:
             keep_source_quant = (
                 quant_config is not None and quant_config.get_name() == "expert_pack"
@@ -1131,6 +1140,7 @@ class MqaAttentionBase(nn.Module):
 
         self.fuse_wqa_wkv = fuse
         self.wo_a_fp8 = fp8
+        self.wo_a_fp8_block32 = fp8_block32
 
         self.attn_sink = nn.Parameter(torch.empty(self.n_heads, dtype=torch.float32))
         self._attn_sink_local: Optional[torch.Tensor] = None
@@ -1197,6 +1207,9 @@ class MqaAttentionBase(nn.Module):
             # that is aiter's B-preshuffle, which silently permutes the weight
             # in place (same shape, dtype and strides) and makes this GEMM
             # return noise.
+            self.wo_a.keep_plain_weight_layout = True
+        elif fp8_block32:
+            # The grouped FP8 GEMM reads .weight / .weight_scale_inv directly.
             self.wo_a.keep_plain_weight_layout = True
         self.wo_b = RowParallelLinear(
             self.n_groups * self.o_lora_rank,
@@ -1874,6 +1887,7 @@ class MQALayer(MqaAttentionBase):
         q: torch.Tensor,
         positions: torch.Tensor,
         q_out: Optional[torch.Tensor] = None,
+        defer_rope: bool = False,
     ) -> torch.Tensor:
         q, _ = self.wq_b(q)
         q = q.view(-1, self.n_local_heads, self.head_dim)
@@ -1893,12 +1907,21 @@ class MQALayer(MqaAttentionBase):
                     positions,
                 )
                 return q_out
-            fused_rope_inplace(
-                q[..., -self.qk_rope_head_dim :],
-                None,
-                self.freqs_cis,
-                positions=positions,
-            )
+            if defer_rope:
+                # The K norm/RoPE store launch rotates q (attn_proj kv_store_q_rope).
+                return q
+            if not (
+                self.attn_proj is not None
+                and dsv41_attn_proj.q_rope_rows(
+                    self.attn_proj, q=q, freqs_cis=self.freqs_cis, positions=positions
+                )
+            ):
+                fused_rope_inplace(
+                    q[..., -self.qk_rope_head_dim :],
+                    None,
+                    self.freqs_cis,
+                    positions=positions,
+                )
             if q_out is None:
                 return q
             q_out.copy_(q)
@@ -1949,7 +1972,7 @@ class MQALayer(MqaAttentionBase):
             eps=self.eps,
             freqs_cis=self.freqs_cis,
             positions=positions,
-            # the query RoPE fused into this store is HIP only
+            # the query RoPE fused into this store: HIP, or SM90 attn_proj
             **({} if q_rope is None else {"q": q_rope}),
         )
 
@@ -2643,8 +2666,19 @@ class MQALayer(MqaAttentionBase):
                     self, q_lora, q_for_wqb, positions, q_out, unified, use_cp
                 )
             else:
-                q = self._compute_q_b(q_for_wqb, positions, q_out)
-                fuse_q_rope = False
+                fuse_q_rope = (
+                    self.attn_proj is not None
+                    and self.attn_proj.kv_store_q_rope
+                    and q_out is None
+                    and not self.q_head_norm
+                    and not self.use_mega_attention
+                    and not unified
+                    and not use_cp
+                    and not in_replay_tail_graph()
+                )
+                q = self._compute_q_b(
+                    q_for_wqb, positions, q_out, defer_rope=fuse_q_rope
+                )
             if unified:
                 # unified_kv prefill: keep bf16 kv; the backend writes
                 # the ring AFTER attention (2-source path).
@@ -3191,6 +3225,17 @@ class MQALayer(MqaAttentionBase):
                 self.wo_a.weight.view(G, self.o_lora_rank, -1),
                 self.wo_a.weight_scale_inv.data,
             )
+        elif self.wo_a_fp8_block32:
+            o = dsv41_attn_proj.wo_a_fp8_block32(
+                self.attn_proj,
+                o=o,
+                freqs_cis=self.freqs_cis,
+                positions=positions,
+                forward_mode=forward_batch.forward_mode,
+                weight=self.wo_a.weight,
+                weight_scale=self.wo_a.weight_scale_inv,
+                num_groups=self.n_local_groups,
+            )
         else:
             fuse_mxfp8_quant = (
                 self.use_flashinfer_mxfp8_wo_b and not get_forward().sp_active
@@ -3217,6 +3262,15 @@ class MQALayer(MqaAttentionBase):
                     cos4,
                     sin4,
                     qk_nope_dim=self.qk_nope_head_dim,
+                )
+            elif self.attn_proj is not None:
+                # V4.1 reference rounding of the bf16 wo_a input.
+                o = dsv41_attn_proj.wo_a_bf16_input(
+                    o=o,
+                    freqs_cis=self.freqs_cis,
+                    positions=positions,
+                    forward_mode=forward_batch.forward_mode,
+                    num_groups=self.n_local_groups,
                 )
             elif inv_rope is None and not fuse_rope_wo_a and not fuse_rope_quant:
                 # The fused path folds this in; it must not run twice.
@@ -5228,6 +5282,7 @@ class DeepseekV4ForCausalLM(
             and config.vision_n_layers > 0
             and not getattr(config, "language_model_only", False)
         )
+        self.wo_a_fp8_block32 = dsv41_attn_proj.wo_a_fp8_block32_enabled(quant_config)
         # The weight loader reads this after the build.
         self.num_fused_shared_experts = get_num_fused_shared_experts()
         self.vision = None
@@ -6007,7 +6062,11 @@ class DeepseekV4ForCausalLM(
         # Must mirror MQALayer.__init__'s `quantize_wo_a`: dequantizing wo_a here
         # while the layer allocated an FP8 parameter (or vice versa) fails the
         # weight loader's dtype check.
-        if not (self.wo_a_fp8 or self.use_npu_arch35_mxfp8_wo_a):
+        if not (
+            self.wo_a_fp8
+            or self.wo_a_fp8_block32
+            or use_npu_arch35_mxfp8_wo_a(self.quant_config)
+        ):
             weights = _prepare_deepseek_v4_weights(weights, self.quant_config)
 
         stacked_params_mapping = DEEPSEEK_V4_STACKED_PARAMS_MAPPING
@@ -6069,6 +6128,16 @@ class DeepseekV4ForCausalLM(
                         f"dtype {loaded_weight.dtype}, expected "
                         "torch.float8_e4m3fn. This checkpoint does not provide "
                         "a supported fp8-quantized wo_a."
+                    )
+                if (
+                    self.wo_a_fp8_block32
+                    and name.endswith(".wo_a.weight")
+                    and loaded_weight.dtype != torch.float8_e4m3fn
+                ):
+                    raise ValueError(
+                        f"The SM90 attn_proj FP8 wo_a needs {name} in "
+                        f"torch.float8_e4m3fn, got {loaded_weight.dtype}; rerun "
+                        "with SGLANG_OPT_DSV41_SM90_DISABLE=attn_proj."
                     )
                 try:
                     use_async_loading = should_async_load(loaded_weight)

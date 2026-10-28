@@ -40,6 +40,7 @@ from sglang.srt.layers.vocab_parallel_embedding import (
 )
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 from sglang.srt.model_executor.forward_context import get_attn_backend
+from sglang.srt.models import deepseek_v4_attn_proj as dsv41_attn_proj
 from sglang.srt.models import deepseek_v4_boundary as hc_boundary
 from sglang.srt.models.deepseek_common.utils import _is_cuda, _is_npu
 from sglang.srt.models.deepseek_v4 import (
@@ -276,6 +277,7 @@ class DeepseekV4ForCausalLMNextN(DeepseekV4ForCausalLM):
         self.language_only = False
         # The draft layer is text-only; the target model prepares image inputs.
         self.supports_visual_inputs = False
+        self.wo_a_fp8_block32 = dsv41_attn_proj.wo_a_fp8_block32_enabled(quant_config)
         self.num_fused_shared_experts = get_num_fused_shared_experts()
 
         self.model = DeepseekV4ModelNextN(

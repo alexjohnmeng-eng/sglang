@@ -606,7 +606,11 @@ def w8a8_block_fp8_matmul_deepgemm(
     block_size: List[int],
     output_dtype: torch.dtype,
     output: Optional[torch.Tensor] = None,
+    out: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
+    if output is not None and out is not None:
+        raise ValueError("pass only one of output= or out=")
+    output = output if output is not None else out
     M, N, K, C = prepare_block_fp8_matmul_inputs(
         A, B, As, Bs, block_size, output_dtype, output
     )

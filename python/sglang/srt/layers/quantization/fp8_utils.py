@@ -1768,11 +1768,15 @@ def deepgemm_w8a8_block_fp8_linear_with_fallback(
     weight_bf16: Optional[torch.Tensor] = None,
     output: Optional[torch.Tensor] = None,
     block32_routes: Optional[Block32Routes] = None,
+    out: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """``output``: optional caller-owned storage of the result's shape. DeepGEMM
     writes a contiguous bf16 one directly; every other case computes and copies.
     On ``block32_routes`` (DeepSeek-V4.1 ``fp8_gemm``) the storage is written by
     the routed GEMMs directly; see ``block32_routed_linear``."""
+    if output is not None and out is not None:
+        raise ValueError("pass only one of output= or out=")
+    output = output if output is not None else out
     output_dtype = torch.bfloat16 if input_scale is not None else input.dtype
     if output is not None:
         assert output.shape == (*input.shape[:-1], weight.shape[0])
