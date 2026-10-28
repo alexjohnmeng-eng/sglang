@@ -11,7 +11,6 @@ import torch
 
 from sglang.srt.layers.attention import deepseek_v4_backend as dsv4
 from sglang.srt.model_executor.runner import decode_cuda_graph_runner as mod
-from sglang.srt.model_executor.runner.metadata_glue_graph import MetadataGlueGraph
 from sglang.test.ci.ci_register import register_cpu_ci
 from sglang.test.test_utils import CustomTestCase
 
@@ -50,7 +49,6 @@ class TestHostFreeDraftPrep(CustomTestCase):
     def test_every_other_setup_says_why(self):
         cases = {
             "not the DSpark draft runner": dict(is_dspark_draft=False),
-            "host sequence lengths": dict(needs_cpu_seq_lens=True),
             "trtllm-gen attention": dict(trtllm_attn=True),
             "online c128 MTP": dict(
                 online_c128_mtp=SimpleNamespace(enabled=lambda: True)
@@ -102,22 +100,43 @@ class TestDraftExtendLengths(CustomTestCase):
                 backend._draft_block_extend_lens([6, 6])
 
 
-class TestGlueCaptureFailure(CustomTestCase):
-    def _run_through_capture(self, glue):
-        backend = mock.Mock(attn_backend_list=None, requires_eager_metadata=False)
-        with (
-            mock.patch("torch.cuda.Stream"),
-            mock.patch("torch.cuda.CUDAGraph"),
-            mock.patch("torch.cuda.graph", side_effect=RuntimeError("host read")),
-        ):
-            for _ in range(glue.NUM_WARMUP + 1):
-                glue.run(backend, fb_view=None, key=1)
+class _DeviceLens(torch.Tensor):
+    """Lengths that fail the step if read on the host (a device->host wait)."""
 
-    def test_strict_raises(self):
-        glue = MetadataGlueGraph("cpu", strict=True)
-        with self.assertRaisesRegex(RuntimeError, "host read"):
-            self._run_through_capture(glue)
-        self.assertFalse(glue.disabled)
+    def tolist(self):
+        raise AssertionError("draft block prep copied the device lengths")
+
+
+class TestUnGluedDraftBlockPrep(CustomTestCase):
+    def _prep(self, backend, seq_lens):
+        seen = {}
+        backend._draft_block_extend_lens = lambda lens: torch.tensor(lens)
+        backend.init_forward_metadata_prefill = lambda **kw: seen.update(kw)
+        backend.page_size = 256
+        backend.init_forward_metadata_dspark_draft_block(
+            max_seq_len=1 << 20,
+            req_pool_indices=torch.arange(2),
+            seq_lens=seq_lens,
+            seq_lens_cpu=None,
+            out_cache_loc=torch.zeros(10, dtype=torch.int64),
+            block_size=5,
+        )
+        return seen
+
+    def test_switch_on_reads_no_host_lengths(self):
+        """Under prefill CP the glue is off, and the per-step host copy of the draft
+        lengths waited for the last verify on every decode step (no CPU run-ahead).
+        Under the switch the prep must use the device lengths only."""
+        backend = _backend(sm90_decode=True)
+        seq_lens = torch.tensor([100, 7]).as_subclass(_DeviceLens)
+        seen = self._prep(backend, seq_lens)
+        self.assertIsNone(seen["seq_lens_cpu"])
+        self.assertEqual(seen["extend_seq_lens_cpu"], [5, 5])
+        self.assertEqual(seen["num_tokens"], 10)
+        self.assertEqual(seen["seq_lens"].as_subclass(torch.Tensor).tolist(), [105, 12])
+        # Off: the upstream host copy.
+        seen = self._prep(_backend(sm90_decode=False), torch.tensor([100, 7]))
+        self.assertEqual(seen["seq_lens_cpu"], [105, 12])
 
 
 def _runner(*, draft=True, backend=None):
@@ -134,17 +153,15 @@ class TestRunnerGluesTheDraft(CustomTestCase):
         step_own = torch.arange(100, 106)
         view = SimpleNamespace(out_cache_loc=step_own)
         runner._draft_metadata_glue = False
-        runner._glue_draft_inputs(view, 6)
+        runner._glue_draft_inputs(view)
         self.assertIs(view.out_cache_loc, step_own)
         runner._draft_metadata_glue = True
-        runner._glue_draft_inputs(view, 6)
+        runner._glue_draft_inputs(view)
         slot = view.out_cache_loc
         self.assertEqual(slot.data_ptr(), runner.buffers.out_cache_loc.data_ptr())
         self.assertEqual(slot.shape, step_own.shape)
-        runner._glue_draft_inputs(view, 8)
-        self.assertEqual(view.out_cache_loc.shape, (8,))
         idle = SimpleNamespace(out_cache_loc=None)
-        runner._glue_draft_inputs(idle, 0)
+        runner._glue_draft_inputs(idle)
         self.assertIsNone(idle.out_cache_loc)
 
 

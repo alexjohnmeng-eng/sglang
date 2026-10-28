@@ -431,6 +431,7 @@ def expand_index_page_table(
     full_page_size: int,
     compress_ratio: int,
     index_page_size: int,
+    one_launch: bool = False,
 ) -> torch.Tensor:
     """Block table of a low-ratio indexer-K pool, which pages at `index_page_size`
     slots: [bs, n] -> [bs, n * blocks_per_page] int32. The kernel reads compressed
@@ -455,6 +456,10 @@ def expand_index_page_table(
         )
 
         return expand_index_page_table_triton(page_table, blocks_per_page)
+    if one_launch and page_table.is_cuda and page_table.stride(1) == 1:
+        from sglang.kernels.ops.attention.dsv4.decode_glue import expand_page_table
+
+        return expand_page_table(page_table, blocks_per_page)
     bs, n = page_table.shape
     base = page_table.to(torch.int64) * blocks_per_page
     offsets = torch.arange(blocks_per_page, device=page_table.device, dtype=torch.int64)

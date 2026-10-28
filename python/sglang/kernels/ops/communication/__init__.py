@@ -59,6 +59,14 @@ register_kernel(
         target="sglang.kernels.ops.communication.engram_gather_peer:engram_gather_peer",
     )
 )
+register_kernel(
+    KernelSpec(
+        op="communication.segment_a2a",
+        backend=KernelBackend.JIT,
+        target="sglang.kernels.ops.communication.segment_a2a:segment_a2a",
+        capabilities=CUDA_ONLY,
+    )
+)
 
 register_kernel(
     KernelSpec(
