@@ -72,6 +72,7 @@ from sglang.srt.layers.dp_attention import (
     is_dp_gatherv_active,
     world_dp_gather_enabled,
 )
+from sglang.srt.layers.dsv41_sm90 import dsv41_sm90_on
 from sglang.srt.layers.linear import ReplicatedLinear
 from sglang.srt.layers.quantization.base_config import QuantizationConfig
 from sglang.srt.layers.utils.common import add_prefix
@@ -778,14 +779,23 @@ class _HostTable:
 
     Lives for the whole process: the mapping, the memfd and the cudaHostRegister
     pin are never released because the table is read by every forward.
+
+    keep_checkpoint_cache (DeepSeek-V4.1 SM90 fast startup) leaves the checkpoint
+    page cache and the THP backing alone: dropping it makes every later reader of
+    the checkpoint (the speculative draft, the next restart) read it from disk,
+    while on H20 hosts (x86, 2 MiB THP) the shards fault in 100% huge without it.
     """
 
     def __init__(self, replication: str, nbytes: int, name: str, group):
         self.replication = replication
+        self.layout = envs.SGLANG_DSV41_ENGRAM_HOST_TABLE_LAYOUT.get()
+        if self.layout not in ("shared", "per_rank"):
+            self.layout = "shared" if replication == EngramReplication.PER_NODE else "per_rank"
         self.nbytes = nbytes
         self.group = group
         self.dirty = False
-        per_node = replication == EngramReplication.PER_NODE
+        self.keep_checkpoint_cache = dsv41_sm90_on("startup")
+        per_node = self.layout == "shared"
         if per_node:
             self.fd = self._open_shared_fd(nbytes, name)
             self.mm = mmap.mmap(
@@ -805,12 +815,13 @@ class _HostTable:
         # Advisory before the first touch: pages are allocated huge at fault time.
         self.mm.madvise(mmap.MADV_HUGEPAGE)
         self.bytes = torch.frombuffer(self.mm, dtype=torch.uint8)
-        if not per_node:
+        if self.layout == "per_rank":
             # Cached checkpoint pages, left by a previous server or by the loader,
             # make the 512 MiB huge-page faults fall back, so empty them first.
-            _drop_page_cache_once("before pre-faulting the per-rank shard")
+            if not self.keep_checkpoint_cache:
+                _drop_page_cache_once("before pre-faulting the per-rank shard")
             np.frombuffer(self.mm, dtype=np.uint8)[:: mmap.PAGESIZE] = 0
-        if per_node:
+        if self.layout == "shared":
             # Every rank holds the fd before rank 0 continues; the /proc path only
             # resolves while rank 0 keeps its descriptor.
             group.barrier()
@@ -862,11 +873,15 @@ class _HostTable:
         if not self.dirty:
             return
         self.dirty = False
-        per_node = self.replication == EngramReplication.PER_NODE
+        per_node = self.layout == "shared"
         if per_node:
             self.group.barrier()
         mapped_kb, huge_kb = _huge_pages_backing(self.bytes.data_ptr())
-        if not per_node and huge_kb < mapped_kb * 0.98:
+        if (
+            self.layout == "per_rank"
+            and not self.keep_checkpoint_cache
+            and huge_kb < mapped_kb * 0.98
+        ):
             # The loader's own reads refilled the page cache; empty it again so the
             # collapse can find contiguous memory.
             drop_checkpoint_page_cache()
@@ -1406,11 +1421,19 @@ class EngramEmbedding(nn.Module):
         self.weight.weight_loader = self._load_rows
         self.scale.weight_loader = self._load_rows
 
+    def _apply(self, fn, recurse=True):
+        # Host-table parameters alias the registered mapping read by CUDA kernels.
+        if self.host_table is not None:
+            return self
+        return super()._apply(fn, recurse=recurse)
+
     def _init_host_table(
         self, num_embeddings: int, dim: int, layer_id: int, replication: str
     ):
-        per_node = replication == EngramReplication.PER_NODE
-        n = num_embeddings if per_node else self.rows
+        layout = envs.SGLANG_DSV41_ENGRAM_HOST_TABLE_LAYOUT.get()
+        if layout not in ("shared", "per_rank"):
+            layout = "shared" if replication == EngramReplication.PER_NODE else "per_rank"
+        n = num_embeddings if layout == "shared" else self.rows
         w_bytes = n * self.row_bytes
         s_bytes = n * (dim // FP8_BLOCK_SIZE)
         self.host_table = _HostTable(
@@ -1430,7 +1453,7 @@ class EngramEmbedding(nn.Module):
     def _shared(self) -> bool:
         return (
             self.host_table is not None
-            and self.host_table.replication == EngramReplication.PER_NODE
+            and self.host_table.layout == "shared"
         )
 
     @property
