@@ -1092,17 +1092,31 @@ class WaitingMMRequestBase(ABC):
         self._fail_and_release(f"Failed to assemble multimodal inputs: {e}")
 
     def _bind_pool_slot_to_mm_inputs(self, mm_inputs) -> bool:
-        """Bind pool-slot release to mm_inputs GC. Returns True if bound."""
+        """Bind pool-slot release to the pooled item views. Returns True if bound."""
         if (
             mm_inputs is None
             or self._pool_slot_id is None
             or self.embedding_pool is None
         ):
             return False
+        # The processor output is not what the request keeps: the scheduler wraps
+        # the same items in a MultimodalInputs, so releasing on the container
+        # frees the slot before the model reads it (concurrent requests then get
+        # each other's embeddings). The item views track the real lifetime.
+        pooled = [
+            item.precomputed_embeddings
+            for item in mm_inputs.mm_items
+            if isinstance(item.precomputed_embeddings, torch.Tensor)
+        ]
+        if pooled:
+            lease = _PoolSlotLease(self.embedding_pool, self._pool_slot_id, len(pooled))
+            for tensor in pooled:
+                weakref.finalize(tensor, lease.release_one)
+        else:
+            lease = _PoolSlotLease(self.embedding_pool, self._pool_slot_id, 1)
+            weakref.finalize(mm_inputs, lease.release_one)
         # Keep the handle so abort can release the slot immediately.
-        self._mm_finalizer = self.embedding_pool.release_on_gc(
-            mm_inputs, self._pool_slot_id
-        )
+        self._mm_finalizer = lease.release_all
         _mark_keep_device_embedding(mm_inputs)
         # Detach so _cleanup_gpu_buffer no-ops; finalize now owns release.
         self._pool_slot_id = None
@@ -1666,6 +1680,38 @@ def _sort_responses_and_compute_total_bytes(response_json_list, total_num_parts)
         response_sorted[idx] = rj
     total_bytes = sum(s for s in embedding_sizes if s is not None)
     return embedding_sizes, response_sorted, total_bytes
+
+
+class _PoolSlotLease:
+    """Release one pool slot once every embedding view into it is gone.
+
+    The view tensors are what the request reads; the container that carried them
+    through the receiver can be dropped earlier and must not own the release.
+    """
+
+    def __init__(self, pool: "EmbeddingPool", slot_id: int, refs: int):
+        self._pool = pool
+        self._slot_id = slot_id
+        self._remaining = refs
+        self._lock = threading.Lock()
+        self._released = False
+
+    def release_one(self, *_args) -> None:
+        with self._lock:
+            if self._released:
+                return
+            self._remaining -= 1
+            if self._remaining > 0:
+                return
+            self._released = True
+        self._pool.release(self._slot_id)
+
+    def release_all(self, *_args) -> None:
+        with self._lock:
+            if self._released:
+                return
+            self._released = True
+        self._pool.release(self._slot_id)
 
 
 class EmbeddingPool:
