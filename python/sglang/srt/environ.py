@@ -2113,6 +2113,12 @@ class Envs:
     SGLANG_DSV4_FP8_HCA_PERSIST = EnvBool(True)
     SGLANG_DSV4_FP8_HCA_PERSIST_MIN_ROWS = EnvInt(15)
 
+    # DeepSeek-V4.1 on SM90: one switch for the H20-tuned paths (layers/dsv41_sm90.py);
+    # off, or on another model or architecture, every caller keeps the upstream path.
+    # DISABLE drops subsystems by name; LOSSY opts into the paths that are not bitwise.
+    SGLANG_OPT_DSV41_SM90 = EnvBool(False)
+    SGLANG_OPT_DSV41_SM90_DISABLE = EnvTuple(())
+    SGLANG_OPT_DSV41_SM90_LOSSY = EnvTuple(())
     SGLANG_OPT_ENGRAM_EXTEND_HASH = EnvBool(False)
     SGLANG_OPT_DSV41_MEGA_MHC_PREFILL = EnvBool(False)
     # Scheduler-side staging of shared host-table rows on GPUs without ATS

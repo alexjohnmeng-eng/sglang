@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import math
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 from weakref import WeakValueDictionary
 
 import torch
@@ -14,7 +16,10 @@ from sglang.kernels.ops.moe.ep_moe_kernels import (
     moe_permute_with_scale,
     moe_unpermute,
 )
-from sglang.kernels.ops.moe.moe_fused_mul_sum import moe_fused_mul_sum
+from sglang.kernels.ops.moe.moe_fused_mul_sum import (
+    moe_fused_mul_sum,
+    moe_fused_mul_sum_scatter,
+)
 from sglang.srt.environ import envs
 from sglang.srt.layers.moe.moe_runner.base import (
     MoeQuantInfo,
@@ -45,10 +50,79 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class HummingDeferredMulSum:
+    """The routed weighted sum an indexed-GEMM run skipped inside
+    humming_deferred_mul_sum_context; mul_sum_kwargs stays None when no run
+    deferred (another runner, gemm type or an empty batch)."""
+
+    def __init__(self) -> None:
+        self.mul_sum_kwargs: Optional[dict[str, Any]] = None
+
+    def finalize_with_shared_add(self, shared: Optional[torch.Tensor]) -> torch.Tensor:
+        """The routed output with ``shared`` added in the same kernel, bitwise
+        the non-deferred output followed by ``routed += shared``."""
+        assert self.mul_sum_kwargs is not None
+        return moe_fused_mul_sum(**self.mul_sum_kwargs, shared=shared)
+
+    def write_rows_with_shared_add(
+        self, rows: slice, *, outputs: torch.Tensor, shared: torch.Tensor
+    ) -> None:
+        """``finalize_with_shared_add(...)[rows]`` written into ``outputs``, with
+        ``shared`` holding only those rows; bitwise the same rows."""
+        assert self.mul_sum_kwargs is not None
+        kwargs = self.mul_sum_kwargs
+        moe_fused_mul_sum(
+            inputs=kwargs["inputs"][rows],
+            topk_weights=kwargs["topk_weights"][rows],
+            topk_ids=kwargs["topk_ids"][rows],
+            is_ep=kwargs["is_ep"],
+            routed_scaling_factor=kwargs["routed_scaling_factor"],
+            outputs=outputs,
+            shared=shared,
+        )
+
+    def write_all_rows_with_shared_add(
+        self, *, rows: int, rank: int, outputs: list, shared: list
+    ) -> None:
+        """write_rows_with_shared_add of every row block p (rows ``[p * rows,
+        (p + 1) * rows)`` into ``outputs[p]`` with ``shared[p]``) in one launch,
+        targets after ``rank`` first; bitwise the same rows."""
+        assert self.mul_sum_kwargs is not None
+        kwargs = self.mul_sum_kwargs
+        moe_fused_mul_sum_scatter(
+            kwargs["inputs"],
+            kwargs["topk_weights"],
+            kwargs["topk_ids"],
+            rows=rows,
+            rank=rank,
+            outputs=outputs,
+            shared=shared,
+            routed_scaling_factor=kwargs["routed_scaling_factor"],
+        )
+
+
+_deferred_mul_sum: contextvars.ContextVar[Optional[HummingDeferredMulSum]] = (
+    contextvars.ContextVar("humming_deferred_mul_sum", default=None)
+)
+
+
+@contextmanager
+def humming_deferred_mul_sum_context() -> Iterator[HummingDeferredMulSum]:
+    """Indexed-GEMM runs inside return their (unwritten) output buffer and leave
+    the final weighted sum to ``finalize_with_shared_add``."""
+    deferred = HummingDeferredMulSum()
+    token = _deferred_mul_sum.set(deferred)
+    try:
+        yield deferred
+    finally:
+        _deferred_mul_sum.reset(token)
+
+
 try:
     from humming import dtypes
     from humming.config import GemmType as HummingGemmType
     from humming.config import InputQuantizationMode
+    from humming.config import MmaType
     from humming.layer import HummingMethod
 
     _humming_available = True
@@ -68,6 +142,59 @@ def get_standard_humming_moe_gemm_type() -> HummingGemmType:
     logger.info_once(f"Using {gemm_type.value} gemm for humming moe")
 
     return gemm_type
+
+
+def humming_quant_input_rows(
+    experts_layer: torch.nn.Module, x: torch.Tensor
+) -> Optional[tuple[torch.Tensor, torch.Tensor]]:
+    """Humming's own w13 input quant of the bf16 rows ``x``: ``(q, scale)``, q fp8
+    e4m3 [rows, K] and scale fp32 [rows, G], or None where that quant is not
+    row-local (not fp8, MXMMA's m-major scales, non-fp32 scales).
+
+    Row-local: quantizing any rows gives exactly those rows of quantizing all of
+    them, so a CP rank may quantize its own rows before the gather; the runner
+    takes the gathered pair as ``pre_quant_input`` with the fp8 ``q`` as the
+    hidden states, bitwise the bf16-input run."""
+    if not _humming_available:
+        return None
+    meta = experts_layer.humming_metas.get("w13")
+    if (
+        meta is None
+        or meta.a_dtype != dtypes.float8e4m3
+        or meta.as_dtype != dtypes.float32
+        or meta.mma_type == MmaType.MXMMA
+        or x.dtype not in (torch.bfloat16, torch.float16)
+    ):
+        return None
+    q, scale = HummingMethod.may_quant_input(
+        layer=experts_layer, inputs=x.reshape(-1, x.shape[-1]), sublayer_name="w13"
+    )
+    return q, scale.reshape(q.shape[0], -1)
+
+
+def _pre_quant_scale(dispatch_output) -> Optional[torch.Tensor]:
+    """The scale of a standard dispatch whose hidden states arrive quantized by
+    humming_quant_input_rows (fp8, with the pair as ``hidden_states_pre_quant``),
+    else None; a bf16 dispatch keeps quantizing inside the runner."""
+    pre_quant = dispatch_output.hidden_states_pre_quant
+    if dispatch_output.hidden_states.dtype != torch.float8_e4m3fn or pre_quant is None:
+        return None
+    assert pre_quant[0].shape == dispatch_output.hidden_states.shape
+    return pre_quant[1]
+
+
+def _without_stream_k(configs):
+    """``configs`` ([[lo, hi, cfg], ...]) with every tile config data-parallel.
+
+    Humming's stream-K epilogue adds a tile's K slices into the bf16 output in
+    place and in arrival order, so the result depends on timing and rounds each
+    partial to bf16; on the H20 W4A8 MoE short prompts' first tokens then
+    changed run to run and, without a BOS token, collapsed to unrelated tokens.
+    """
+    return [
+        [lo, hi, {**cfg, "use_stream_k": False} if cfg.get("use_stream_k") else cfg]
+        for lo, hi, cfg in configs
+    ]
 
 
 @dataclass
@@ -664,7 +791,7 @@ class HummingRunnerCore(MoeRunnerCore):
         routed_scaling_factor = (
             self.config.routed_scaling_factor if apply_routed_scaling_factor else None
         )
-        moe_fused_mul_sum(
+        mul_sum_kwargs = dict(
             inputs=buffers["down_output"].view(*topk_ids.shape, -1),
             topk_weights=topk_weights,
             topk_ids=topk_ids,
@@ -672,6 +799,11 @@ class HummingRunnerCore(MoeRunnerCore):
             routed_scaling_factor=routed_scaling_factor,
             outputs=buffers["output"],
         )
+        deferred = _deferred_mul_sum.get()
+        if deferred is not None:
+            deferred.mul_sum_kwargs = mul_sum_kwargs
+        else:
+            moe_fused_mul_sum(**mul_sum_kwargs)
 
         return buffers["output"]
 
@@ -862,6 +994,7 @@ def fused_experts_none_to_humming(
         topk_weights=topk_weights,
         topk_ids=topk_ids,
         gemm_type=get_standard_humming_moe_gemm_type(),
+        hidden_states_scale=_pre_quant_scale(dispatch_output),
     )
 
     # ``humming_moe_runner_core_run`` resolves the runner through
@@ -1032,6 +1165,7 @@ def pre_permute_standard_to_humming(
         topk_weights=topk_weights,
         topk_ids=topk_ids.int(),
         gemm_type=get_standard_humming_moe_gemm_type(),
+        hidden_states_scale=_pre_quant_scale(dispatch_output),
     )
 
 

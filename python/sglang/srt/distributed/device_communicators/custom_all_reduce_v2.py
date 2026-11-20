@@ -108,6 +108,26 @@ def _ceil_align(nbytes: int, align: int) -> int:
 _EagerPlan = Tuple["Module", str, bool]
 
 
+def _allocate_symmetric_memory(nbytes: int, device: torch.device, group: ProcessGroup):
+    """A raw symmetric-memory allocation (no workspace registry): the CP prefill
+    collectives hold these tensors for the server's lifetime."""
+    from torch._C._distributed_c10d import _SymmetricMemory
+
+    if torch.__version__ < "2.11.0":
+        import torch.distributed._symmetric_memory as torch_symm_mem
+
+        torch_symm_mem.enable_symm_mem_for_group(group.group_name)
+    tensor = _SymmetricMemory.empty_strided_p2p(
+        (nbytes,),
+        [1],
+        torch.uint8,
+        device,
+        group.group_name,
+    )
+    symm_mem = _SymmetricMemory.rendezvous(tensor)
+    return tensor, symm_mem
+
+
 class AllReduceChoice(NamedTuple):
     # None when ``use_ring``: ring_simple is not a kernel algo of the communicator
     algo: Optional[AllReduceAlgo]
@@ -546,6 +566,9 @@ class CustomAllReduceV2:
             "Cannot register graph inputs while capturing CUDA graph"
         )
         self._register_graph_inputs()
+
+    def discard_pending_graph_inputs(self) -> None:
+        self._graph_inputs.clear()
 
     def _register_graph_inputs(self) -> None:
         if not self._pending_graph_inputs:

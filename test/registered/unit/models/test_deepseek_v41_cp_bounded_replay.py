@@ -294,7 +294,7 @@ class TestEagerCpOutputHook(CustomTestCase):
         local = hidden[::4], pre[::4]
 
         @contextlib.contextmanager
-        def shard(*_args):
+        def shard(*_args, **_kwargs):
             yield None, None, None
 
         def logits(input_ids, states, head, batch, aux, **kwargs):
@@ -374,7 +374,7 @@ class TestEagerCpOutputHook(CustomTestCase):
         runner = SimpleNamespace(model_runner=SimpleNamespace(model=model))
 
         @contextlib.contextmanager
-        def shard(*_args):
+        def shard(*_args, **_kwargs):
             yield None, None, None
 
         with mock.patch.object(eager_runner, "cp_shard_model_inputs", shard):
@@ -395,7 +395,7 @@ class TestEagerCpOutputHook(CustomTestCase):
         batch = make_batch()
 
         @contextlib.contextmanager
-        def shard(*_args):
+        def shard(*_args, **_kwargs):
             yield None, None, None
 
         with (

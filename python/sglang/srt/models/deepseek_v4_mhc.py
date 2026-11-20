@@ -165,7 +165,15 @@ class HcQuantized(NamedTuple):
     pair: Tuple[torch.Tensor, torch.Tensor]
 
 
-HcPreOutput: TypeAlias = Union[HcNormed, HcQuantized]
+class HcCombined(NamedTuple):
+    """Summed but not normed (the SM90 fused post below the norm-fold rows); the
+    receiver applies its own norm. Nothing on this tree produces one; the CP
+    prefill graphs accept it for parity with the antgroup SM90 port."""
+
+    rows: torch.Tensor
+
+
+HcPreOutput: TypeAlias = Union[HcNormed, HcQuantized, HcCombined]
 """The next sublayer's input, built by the previous post; a receiver skips step 2
 (and ``pre``) entirely. Always normed -- combine and norm travel together."""
 

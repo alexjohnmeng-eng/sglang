@@ -8,6 +8,7 @@ from sglang.srt.layers.cp.base import get_cp_strategy, is_cp_sharded_padded
 from sglang.srt.layers.cp.utils import (
     get_cp_sharded_padded_allocation_tokens,
 )
+from sglang.srt.layers.dsv41_sm90 import dsv41_sm90_on
 from sglang.srt.managers.prefill_delayer import PrefillDelayerSinglePassExecutor
 from sglang.srt.runtime_context import (
     get_context,
@@ -137,6 +138,18 @@ WAITING_PREFIX_REFRESH_INTERVAL = 32
 
 def _ceil_div(value: int, divisor: int) -> int:
     return -(-value // divisor)
+
+
+def late_tail_safe_chunk_len(*, remaining: int, budget: int, window: int) -> int:
+    """Largest continuation chunk, up to budget, that keeps a decoder SWA bounded
+    replay prefill readable when CP prefill chunks leaving at least a window of
+    the request's `remaining` fill tokens skip their late layers
+    (DeepseekV4AttnBackend._late_layer_tail_unread). The first chunk leaving less
+    must hold a whole window, so its late layers read nothing written before it.
+    0 means wait for more budget."""
+    if remaining < window or budget >= window or remaining - budget >= window:
+        return budget
+    return remaining - window
 
 
 def estimate_prefill_extend_tile_metrics(
@@ -992,6 +1005,17 @@ class PrefillAdder:
             else self.logical_page_size
         )
         self.prefill_max_requests = prefill_max_requests
+        # Window of late_tail_safe_chunk_len; 0 when no prefill chunk skips its
+        # late layers.
+        self.late_tail_window = 0
+        if (
+            dsv41_sm90_on("cp")
+            and get_exec().features.enable_decoder_swa_bounded_replay
+            and get_parallel().attn_cp_size > 1
+        ):
+            from sglang.srt.layers.attention.deepseek_v4_backend import SWA_WINDOW
+
+            self.late_tail_window = SWA_WINDOW
         self.prefill_delayer_single_pass = prefill_delayer_single_pass
         self.max_prefill_bs = max_prefill_bs
         # Snapshot of scheduler waiting_queue length at the start of this
@@ -1594,6 +1618,16 @@ class PrefillAdder:
         )
         if _rem_tokens is None:
             return req
+        if self.late_tail_window:
+            _rem_tokens = late_tail_safe_chunk_len(
+                remaining=cand_extend_input_len,
+                budget=_rem_tokens,
+                window=self.late_tail_window,
+            )
+            if _rem_tokens <= 0:
+                # Parked, admitting no one else into the budget it waits for.
+                self.rem_chunk_tokens = 0
+                return req
         truncated = cand_extend_input_len > _rem_tokens
         new_len = self.floor_chunked_tokens(
             min(cand_extend_input_len, _rem_tokens), cand_extend_input_len

@@ -539,9 +539,10 @@ class TestDSV41MultimodalInputs(CustomTestCase):
         self.model.logits_processor = Mock(return_value="ok")
 
         @contextmanager
-        def shard(embeds, positions, batch, ids):
+        def shard(embeds, positions, batch, ids, sharded_hidden_states=None):
             self.assertIs(embeds, self.embeds)
             self.assertTrue(torch.equal(ids, normalized))
+            self.assertIsNone(sharded_hidden_states)
             yield (embeds[1::4], positions[1::4], ids[1::4])
 
         runner = NS(model_runner=NS(model=self.model))
