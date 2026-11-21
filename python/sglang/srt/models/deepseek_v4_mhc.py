@@ -121,6 +121,23 @@ HcTriplet = Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 MHC_POST_MULT_VALUE = 2.0
 
 
+class Sm90HcRows(msgspec.Struct, frozen=True):
+    partial_v2_min: Optional[int]
+    partial_wgmma_min: Optional[int]
+    stats_stream_max: int
+    combine_norm_min: Optional[int]
+    post_combine_norm_min: Optional[int]
+
+
+_SM90_ROWS_H20 = Sm90HcRows(2, 128, 384, 1024, 2048)
+_SM90_ROWS = {"NVIDIA H20": _SM90_ROWS_H20, "NVIDIA H20-3e": _SM90_ROWS_H20}
+_SM90_ROWS_DEFAULT = Sm90HcRows(None, None, 64, None, None)
+
+
+def sm90_hc_rows(device_name: str) -> Sm90HcRows:
+    return _SM90_ROWS.get(device_name, _SM90_ROWS_DEFAULT)
+
+
 class HcConfig(NamedTuple):
     """Everything about a layer's mHC that is fixed for the model's lifetime."""
 
@@ -131,6 +148,7 @@ class HcConfig(NamedTuple):
     hidden: int
     pre_from_prev: bool
     cp_prefill: bool
+    sm90: Optional[Sm90HcRows] = None
 
 
 class HcSubLayer(NamedTuple):
