@@ -69,6 +69,10 @@ def draft_uses_compressed_kv_attention() -> bool:
     return draft_hf_config is not None and uses_compressed_kv_attention(draft_hf_config)
 
 
+def draft_is_deepseek_v4() -> bool:
+    return draft_uses_compressed_kv_attention()
+
+
 def dspark_gamma_from_num_draft_tokens(num_draft_tokens: int) -> int:
     gamma = int(num_draft_tokens) - 1
     if gamma < 1:
