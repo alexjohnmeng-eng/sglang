@@ -748,6 +748,7 @@ def _hip_runtime() -> ctypes.CDLL:
 # and the single-block sort costs several times the gather. Arbitrary, between the
 # decode-step and prefill-chunk lookup sizes.
 _MIN_SORTED_HOST_READS = 4096
+_SORTED_READ_MIN_IDS = 1 << 17
 
 
 @functools.cache
