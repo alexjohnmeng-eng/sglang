@@ -170,9 +170,10 @@ def run(
         global_ids + parallel.moe_ep_rank * local_experts,
         global_ids,
     )
+    # DeepSeek applies routed_scaling_factor in the outer MoE epilogue after
+    # the routed output is combined with the separate shared expert. Keep the
+    # weights unchanged here so the factor is applied exactly once.
     route_weights = topk_weights.float()
-    if routed_scaling_factor is not None:
-        route_weights = route_weights * float(routed_scaling_factor)
     buffer.stage(x_fp8, x_sf, global_ids, route_weights)
     output = torch.empty_like(hidden_states)
     import flashinfer.megamoe as megamoe
