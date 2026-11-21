@@ -17,10 +17,18 @@ from sglang.srt.runtime_context import get_parallel
 from sglang.srt.utils.device import get_device_sm
 
 logger = logging.getLogger(__name__)
+_BUFFERS: dict[tuple[int, int], object] = {}
 
 
 def enabled() -> bool:
-    return envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_PREPARE.get()
+    return (
+        envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_PREPARE.get()
+        or envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN.get()
+    )
+
+
+def run_enabled() -> bool:
+    return envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN.get()
 
 
 def available() -> bool:
@@ -96,3 +104,84 @@ def prepare_layer(layer: torch.nn.Module) -> bool:
 
 def get_prepared_weights(layer: torch.nn.Module) -> Optional[tuple[torch.Tensor, torch.Tensor]]:
     return getattr(layer, "_flashinfer_sm90_mxfp4_weights", None)
+
+
+def _get_buffer(hidden: torch.Tensor, capacity: int):
+    import flashinfer.megamoe as megamoe
+
+    parallel = get_parallel()
+    group = parallel.moe_ep_group.device_group
+    key = (id(group), capacity)
+    buffer = _BUFFERS.get(key)
+    if buffer is None:
+        buffer = megamoe.MegaMoESymmBuffer(
+            group,
+            384,
+            capacity,
+            6,
+            5120,
+            2304,
+        )
+        _BUFFERS[key] = buffer
+        logger.info("FlashInfer SM90 MXFP4 buffer ready capacity=%d", capacity)
+    return buffer
+
+
+def run(
+    layer: torch.nn.Module,
+    hidden_states: torch.Tensor,
+    topk_weights: torch.Tensor,
+    topk_ids: torch.Tensor,
+    routed_scaling_factor: Optional[float],
+) -> torch.Tensor:
+    """Run the SM90 fused EP kernel for a local CP/EP row block."""
+    if not run_enabled():
+        raise RuntimeError("FlashInfer SM90 MXFP4 runner is not enabled")
+    weights = get_prepared_weights(layer)
+    if weights is None:
+        raise RuntimeError("FlashInfer SM90 MXFP4 weights were not prepared")
+    if (
+        hidden_states.ndim != 2
+        or hidden_states.dtype != torch.bfloat16
+        or hidden_states.shape[1] != 5120
+        or topk_ids.shape != (hidden_states.shape[0], 6)
+    ):
+        raise ValueError(
+            "unsupported FlashInfer SM90 MXFP4 batch shape: "
+            f"hidden={tuple(hidden_states.shape)} topk={tuple(topk_ids.shape)}"
+        )
+    num_tokens = hidden_states.shape[0]
+    if num_tokens == 0:
+        return hidden_states.new_empty(hidden_states.shape)
+    capacity = max(envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS.get(), num_tokens)
+    buffer = _get_buffer(hidden_states, capacity)
+    from sglang.kernels.ops.quantization.fp8_kernel import (
+        sglang_per_token_group_quant_fp8,
+    )
+
+    x_fp8, x_sf = sglang_per_token_group_quant_fp8(hidden_states, 128)
+    if x_sf.shape != (num_tokens, 40):
+        raise ValueError(f"unexpected activation scale shape {tuple(x_sf.shape)}")
+    parallel = get_parallel()
+    global_ids = topk_ids.to(torch.int64)
+    local_experts = 384 // parallel.moe_ep_size
+    global_ids = torch.where(
+        global_ids >= 0,
+        global_ids + parallel.moe_ep_rank * local_experts,
+        global_ids,
+    )
+    route_weights = topk_weights.float()
+    if routed_scaling_factor is not None:
+        route_weights = route_weights * float(routed_scaling_factor)
+    buffer.stage(x_fp8, x_sf, global_ids, route_weights)
+    output = torch.empty_like(hidden_states)
+    import flashinfer.megamoe as megamoe
+
+    megamoe.mxfp4_mega_moe(
+        output,
+        weights[0],
+        weights[1],
+        buffer,
+        num_tokens=num_tokens,
+    )
+    return output

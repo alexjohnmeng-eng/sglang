@@ -2162,6 +2162,9 @@ class Envs:
     # retains Humming as the forward path while validating the real checkpoint
     # layout and memory cost.
     SGLANG_OPT_DSV41_FLASHINFER_SM90_PREPARE = EnvBool(False)
+    # Run the prepared SM90 MXFP4 weights through FlashInfer's fused EP kernel.
+    SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN = EnvBool(False)
+    SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS = EnvInt(8192)
     SGLANG_FP8_PAGED_MQA_LOGITS_TORCH = EnvBool(False)
     SGLANG_OPT_FLASHMLA_SPARSE_PREFILL = EnvBool(True)
     # gfx950 DeepSeek-V4.1 prefill: attend with aiter's OPUS sparse kernel over a bf16

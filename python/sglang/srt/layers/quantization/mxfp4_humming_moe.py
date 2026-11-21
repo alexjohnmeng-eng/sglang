@@ -79,12 +79,32 @@ class Mxfp4HummingMoEMethod:
 
             prepare_layer(layer)
 
-        if envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_PREPARE.get():
-            from sglang.srt.layers.moe.moe_runner.flashinfer_sm90_mxfp4 import (
-                prepare_layer,
-            )
+        if (
+            envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_PREPARE.get()
+            or envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN.get()
+        ):
+            from sglang.srt.layers.moe.moe_runner import flashinfer_sm90_mxfp4
 
-            prepare_layer(layer)
+            prepared = flashinfer_sm90_mxfp4.prepare_layer(layer)
+            if envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN.get():
+                if not prepared:
+                    raise RuntimeError(
+                        f"FlashInfer SM90 MXFP4 preparation failed for {self.prefix}"
+                    )
+                for name in (
+                    "w13_weight",
+                    "w13_weight_scale_inv",
+                    "w13_weight_scale",
+                    "w2_weight",
+                    "w2_weight_scale_inv",
+                    "w2_weight_scale",
+                    "w13_weight_bias",
+                    "w2_weight_bias",
+                ):
+                    if hasattr(layer, name):
+                        delattr(layer, name)
+                layer._flashinfer_sm90_mxfp4_only = True
+                return
 
         if getattr(layer, "_mega_moe_weights_built", False):
             return
@@ -120,6 +140,23 @@ class Mxfp4HummingMoEMethod:
         layer: Module,
         dispatch_output: DispatchOutput,
     ) -> CombineInput:
+        if envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN.get():
+            from sglang.srt.layers.moe.moe_runner.flashinfer_sm90_mxfp4 import run
+            from sglang.srt.layers.moe.token_dispatcher.standard import (
+                StandardCombineInput,
+            )
+
+            topk_output = dispatch_output.topk_output
+            return StandardCombineInput(
+                hidden_states=run(
+                    layer,
+                    dispatch_output.hidden_states,
+                    topk_output.topk_weights,
+                    topk_output.topk_ids,
+                    layer.moe_runner_config.routed_scaling_factor,
+                )
+            )
+
         from sglang.srt.layers.moe.moe_runner.humming import HummingMoeQuantInfo
 
         quant_info = HummingMoeQuantInfo(layer=layer)
