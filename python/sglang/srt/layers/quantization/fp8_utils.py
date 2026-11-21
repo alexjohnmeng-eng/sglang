@@ -62,6 +62,7 @@ from sglang.srt.utils.log_utils import print_warning_once
 
 if TYPE_CHECKING:
     from sglang.srt.layers.linear import LinearBase
+    from sglang.srt.layers.quantization.fp8_block32_sm90 import Block32Routes
 
 logger = logging.getLogger(__name__)
 
@@ -739,6 +740,7 @@ if get_platform().is_sm90 and is_flashinfer_available():
 def dispatch_w8a8_block_fp8_linear(
     weight_block_size: Optional[List[int]] = None,
     act_scale_ue8m0: bool = False,
+    block32_routes: Optional[Block32Routes] = None,
 ) -> Callable:
     """
     Dispatch to the appropriate FP8 block linear implementation.
@@ -746,6 +748,9 @@ def dispatch_w8a8_block_fp8_linear(
     This function selects the backend based on:
     1. The --fp8-gemm-backend server argument (preferred)
     2. Auto-detection based on hardware capabilities
+
+    ``block32_routes`` (DeepSeek-V4.1 ``fp8_gemm``) replaces the SM90 block32
+    DeepGEMM route of a ue8m0 checkpoint, see ``fp8_block32_sm90``.
     """
     backend = get_fp8_gemm_runner_backend()
     # Native block32 DeepGEMM is the default on SM90. SM100 DeepGEMM casts the
@@ -758,6 +763,12 @@ def dispatch_w8a8_block_fp8_linear(
             or (get_platform().is_sm100 and backend.is_deep_gemm() and act_scale_ue8m0)
         )
     ):
+        if block32_routes is not None and get_platform().is_sm90 and act_scale_ue8m0:
+            return partial(
+                deepgemm_w8a8_block_fp8_linear_with_fallback,
+                act_scale_ue8m0=True,
+                block32_routes=block32_routes,
+            )
         return partial(
             deepgemm_w8a8_block_fp8_linear_with_fallback,
             act_scale_ue8m0=act_scale_ue8m0,
@@ -1756,9 +1767,12 @@ def deepgemm_w8a8_block_fp8_linear_with_fallback(
     act_scale_ue8m0: bool = False,
     weight_bf16: Optional[torch.Tensor] = None,
     output: Optional[torch.Tensor] = None,
+    block32_routes: Optional[Block32Routes] = None,
 ) -> torch.Tensor:
     """``output``: optional caller-owned storage of the result's shape. DeepGEMM
-    writes a contiguous bf16 one directly; every other case computes and copies."""
+    writes a contiguous bf16 one directly; every other case computes and copies.
+    On ``block32_routes`` (DeepSeek-V4.1 ``fp8_gemm``) the storage is written by
+    the routed GEMMs directly; see ``block32_routed_linear``."""
     output_dtype = torch.bfloat16 if input_scale is not None else input.dtype
     if output is not None:
         assert output.shape == (*input.shape[:-1], weight.shape[0])
@@ -1814,6 +1828,21 @@ def deepgemm_w8a8_block_fp8_linear_with_fallback(
         prequant_k_tail
         or _deepgemm_block_fp8_supported(weight.shape, block_size, output_dtype)
     )
+    if block32_routes is not None and deepgemm_supported:
+        from sglang.srt.layers.quantization.fp8_block32_sm90 import (
+            block32_routed_linear,
+        )
+
+        return block32_routed_linear(
+            input=input,
+            weight=weight,
+            weight_scale=weight_scale,
+            input_scale=input_scale,
+            bias=bias,
+            routes=block32_routes,
+            out=output,
+        )
+    assert output is None, "output= is served on the SM90 block32 routes only"
     if input_scale is not None:
         if input_scale.dtype == torch.int32:
             # Packed activation scales cannot go through the Triton fallback.
