@@ -5,7 +5,7 @@ DeepGEMM sparse table (``sparse_table``) or dense block ids (``dense_blocks``)."
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import torch
 
@@ -91,8 +91,8 @@ def make_full_topk_indexer(
     *,
     token_to_kv_pool: DeepSeekV4TokenToKVPool,
     req_to_token: torch.Tensor,
-    index_heads: int,
-    index_topk: int,
+    index_heads: Optional[int] = None,
+    index_topk: Optional[int] = None,
 ) -> FullTopKIndexer:
     # Prefill top-k from the sampled-threshold fp4 indexer (kernels/ops/attention/dsa/litetopk_prefill) where it
     # reproduces the DeepGEMM path: bf16 head weights, 32 or 64 index heads, a supported top-k.
