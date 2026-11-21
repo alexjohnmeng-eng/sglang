@@ -79,6 +79,13 @@ class Mxfp4HummingMoEMethod:
 
             prepare_layer(layer)
 
+        if envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_PREPARE.get():
+            from sglang.srt.layers.moe.moe_runner.flashinfer_sm90_mxfp4 import (
+                prepare_layer,
+            )
+
+            prepare_layer(layer)
+
         if getattr(layer, "_mega_moe_weights_built", False):
             return
 

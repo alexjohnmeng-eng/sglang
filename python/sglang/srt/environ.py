@@ -2158,6 +2158,10 @@ class Envs:
     # Opt-in H20 gc-moe routed path. The adapter is decode/verify-only and
     # falls back to the selected runner when its geometry is not supported.
     SGLANG_OPT_DSV41_GC_MOE = EnvBool(False)
+    # Opt-in FlashInfer 0.7.5 SM90 MXFP4 weight preparation. The first stage
+    # retains Humming as the forward path while validating the real checkpoint
+    # layout and memory cost.
+    SGLANG_OPT_DSV41_FLASHINFER_SM90_PREPARE = EnvBool(False)
     SGLANG_FP8_PAGED_MQA_LOGITS_TORCH = EnvBool(False)
     SGLANG_OPT_FLASHMLA_SPARSE_PREFILL = EnvBool(True)
     # gfx950 DeepSeek-V4.1 prefill: attend with aiter's OPUS sparse kernel over a bf16
