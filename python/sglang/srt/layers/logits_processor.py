@@ -101,6 +101,10 @@ _UNQUANTIZED_LM_HEAD_METHODS = {
 # under DP attention with a tight mem_fraction_static.
 _autotune_run_lm_head: Optional[bool] = None
 
+VERIFY_VOCAB_SHARDS = "vocab_shards"
+VERIFY_FULL_LOGITS = "full_logits"
+VERIFY_LOGITS_VARIANTS = (VERIFY_VOCAB_SHARDS, VERIFY_FULL_LOGITS)
+
 
 class SamplingMaskStatus(IntEnum):
     """Ordered by severity so distributed MAX reaches one policy decision."""
