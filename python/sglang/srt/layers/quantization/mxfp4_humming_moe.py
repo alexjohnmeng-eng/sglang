@@ -80,8 +80,11 @@ class Mxfp4HummingMoEMethod:
             prepare_layer(layer)
 
         if (
-            envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_PREPARE.get()
-            or envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN.get()
+            not getattr(layer, "is_draft", False)
+            and (
+                envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_PREPARE.get()
+                or envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN.get()
+            )
         ):
             from sglang.srt.layers.moe.moe_runner import flashinfer_sm90_mxfp4
 
@@ -140,7 +143,10 @@ class Mxfp4HummingMoEMethod:
         layer: Module,
         dispatch_output: DispatchOutput,
     ) -> CombineInput:
-        if envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN.get():
+        if (
+            envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN.get()
+            and not getattr(layer, "is_draft", False)
+        ):
             from sglang.srt.layers.moe.moe_runner.flashinfer_sm90_mxfp4 import run
             from sglang.srt.layers.moe.token_dispatcher.standard import (
                 StandardCombineInput,
