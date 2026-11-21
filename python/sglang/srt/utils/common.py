@@ -120,6 +120,11 @@ logger = logging.getLogger(__name__)
 torch_release = pkg_version.parse(torch.__version__).release
 
 
+@lru_cache(maxsize=1)
+def is_mlu() -> bool:
+    return hasattr(torch, "mlu") and torch.mlu.is_available()
+
+
 # ==============================================================================
 # BEGIN: Multi-Device & CUDA Version Utilities
 # ------------------------------------------------------------------------------
