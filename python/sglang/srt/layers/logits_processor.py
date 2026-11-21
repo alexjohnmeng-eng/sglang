@@ -111,6 +111,20 @@ class SamplingMaskStatus(IntEnum):
 
 
 @dataclasses.dataclass
+class _TypedCustomizedInfo:
+    rows: Union[torch.Tensor, List[Any]]
+    ready: Optional[torch.Event] = None
+
+
+class TokenCustomizedInfo(_TypedCustomizedInfo):
+    """Per-emitted-token customized information."""
+
+
+class RequestCustomizedInfo(_TypedCustomizedInfo):
+    """Per-request customized information."""
+
+
+@dataclasses.dataclass
 class SamplingMaskOutput:
     """Sampling-support IDs and optional full-support behavior logprobs."""
 
