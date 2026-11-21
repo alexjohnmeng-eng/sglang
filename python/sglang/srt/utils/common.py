@@ -126,18 +126,37 @@ def is_mlu() -> bool:
 
 
 class TypeBasedDispatcher:
-    def __init__(self, dispatch_pairs):
-        self.dispatch_pairs = list(dispatch_pairs)
+    def __init__(self, mapping):
+        self._mapping = OrderedDict(mapping)
+        self._mro_cache = {}
+        self._fallback_fn = None
+
+    def add_fallback_fn(self, fallback_fn):
+        self._fallback_fn = fallback_fn
 
     def __iadd__(self, other):
-        self.dispatch_pairs.extend(other.dispatch_pairs)
+        for typ, fn in other._mapping.items():
+            if typ not in self._mapping:
+                self._mapping[typ] = fn
+        self._mro_cache.clear()
         return self
 
     def __call__(self, value):
-        for typ, fn in self.dispatch_pairs:
+        obj_type = type(value)
+        fn = self._mapping.get(obj_type)
+        if fn is not None:
+            return fn(value)
+        cached = self._mro_cache.get(obj_type)
+        if cached is not None:
+            return cached(value)
+        for typ, fn in self._mapping.items():
             if isinstance(value, typ):
+                self._mro_cache[obj_type] = fn
                 return fn(value)
-        raise TypeError(f"No dispatcher handler for {type(value)!r}")
+        self._mro_cache[obj_type] = None
+        if self._fallback_fn is not None:
+            return self._fallback_fn(value)
+        raise ValueError(f"Invalid object: {value}")
 
 
 # ==============================================================================
