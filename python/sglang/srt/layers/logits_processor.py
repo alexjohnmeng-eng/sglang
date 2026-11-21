@@ -347,7 +347,6 @@ class LogitsProcessorOutput:
                     sequences[i] = [row for span in spans for row in span.tolist()]
 
 
-@dataclasses.dataclass
 def extend_reads_input_logprobs(forward_batch: ForwardBatch) -> bool:
     return forward_batch.return_logprob and any(
         extend_len > start_len
@@ -358,6 +357,7 @@ def extend_reads_input_logprobs(forward_batch: ForwardBatch) -> bool:
     )
 
 
+@dataclasses.dataclass
 class LogitsMetadata:
     forward_mode: ForwardMode
     capture_hidden_mode: CaptureHiddenMode = CaptureHiddenMode.NULL
