@@ -2720,9 +2720,6 @@ REMOVED_ENVS: Dict[str, str] = {
     "--prefill-delayer-token-usage-low-watermark",
     "SGLANG_ROCM_OPT_DSPARK_FP8_LM_HEAD": "pass --speculative-dspark-lm-head-dtype fp8",
     "SGLANG_USE_CUDA_IPC_TRANSPORT": "pass --mm-feature-transport cuda_ipc (or cpu)",
-    "SGLANG_ENABLE_DSV41_ENGRAM_HOST_TABLE": """pass --engram-config '{"placement": "cpu"}'""",
-    "SGLANG_DSV41_ENGRAM_HOST_TABLE_LAYOUT": """pass --engram-config '{"placement": "cpu"}', """
-    """adding "replication": "per_node" for the shared layout""",
     "SGLANG_OPT_DSV41_ENGRAM_PEER_SHARDS": """pass --engram-config '{"lookup": "peer_read"}'""",
     "SGLANG_DISAGGREGATION_SAMPLING_MASK_MAX_TOKENS": "to enable sampling masks "
     "for disaggregated serving, set SGLANG_ENABLE_DISAGG_SAMPLING_MASK=1 and use "
