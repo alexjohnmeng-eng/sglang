@@ -1247,8 +1247,14 @@ def resolve_engram_config(columns: int) -> EngramConfig:
     # Keep the documented V4.1 host-table environment interface working for
     # launch scripts that predate --engram-config.  An explicit CLI config wins.
     if (
-        get_exec().offload.engram_config is None
-        and envs.SGLANG_ENABLE_DSV41_ENGRAM_HOST_TABLE.get()
+        envs.SGLANG_ENABLE_DSV41_ENGRAM_HOST_TABLE.get()
+        and (
+            get_exec().offload.engram_config is None
+            or (
+                config.placement == EngramPlacement.GPU
+                and config.replication == EngramReplication.NONE
+            )
+        )
     ):
         layout = envs.SGLANG_DSV41_ENGRAM_HOST_TABLE_LAYOUT.get()
         if layout not in ("shared", "per_rank"):
