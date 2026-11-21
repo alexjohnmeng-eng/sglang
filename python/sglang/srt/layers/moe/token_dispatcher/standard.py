@@ -108,6 +108,10 @@ def _keeps_global_expert_ids(backend: Optional[MoeRunnerBackendLike]) -> bool:
         or backend.is_hpc_ops()
         or backend.is_flashinfer_megamoe()
         or backend.is_flashinfer_mxfp4()
+        or (
+            backend.is_humming()
+            and _envs.SGLANG_OPT_DSV41_GC_MOE.get()
+        )
     )
 
 

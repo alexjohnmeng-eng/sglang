@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch.nn import Module, Parameter
 
+from sglang.srt.environ import envs
 from sglang.srt.layers.moe.utils import MoeRunnerBackend
 from sglang.srt.utils import log_info_on_rank0
 
@@ -69,6 +70,14 @@ class Mxfp4HummingMoEMethod:
 
         # FP8 base normalization (ROCm-specific handling etc.)
         self._fp8.process_weights_after_loading(layer)
+
+        # Keep a gc-moe tile copy before Humming repacks the MXFP4 weights.
+        # The adapter is opt-in and remains unused unless the decode runner
+        # selects it for the current batch.
+        if envs.SGLANG_OPT_DSV41_GC_MOE.get():
+            from sglang.srt.layers.moe.moe_runner.gc_moe import prepare_layer
+
+            prepare_layer(layer)
 
         if getattr(layer, "_mega_moe_weights_built", False):
             return

@@ -2155,6 +2155,9 @@ class Envs:
     SGLANG_OPT_USE_PREFILL_LITE_TOPK = EnvBool(False)
     SGLANG_OPT_DSV41_TRITON_PREFILL_SELECTION = EnvBool(False)
     SGLANG_OPT_DSV41_VERIFY_INDEXER_BF16_K_REUSE = EnvBool(False)
+    # Opt-in H20 gc-moe routed path. The adapter is decode/verify-only and
+    # falls back to the selected runner when its geometry is not supported.
+    SGLANG_OPT_DSV41_GC_MOE = EnvBool(False)
     SGLANG_FP8_PAGED_MQA_LOGITS_TORCH = EnvBool(False)
     SGLANG_OPT_FLASHMLA_SPARSE_PREFILL = EnvBool(True)
     # gfx950 DeepSeek-V4.1 prefill: attend with aiter's OPUS sparse kernel over a bf16

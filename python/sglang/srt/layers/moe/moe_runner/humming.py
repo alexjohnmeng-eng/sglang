@@ -989,6 +989,22 @@ def fused_experts_none_to_humming(
     topk_ids = topk_output.topk_ids
     topk_weights = topk_output.topk_weights
 
+    from sglang.srt.layers.moe.moe_runner.gc_moe import run as run_gc_moe
+
+    gc_output = run_gc_moe(
+        quant_info.layer,
+        hidden_states,
+        topk_weights,
+        topk_ids,
+        quant_info.layer.moe_runner_config.routed_scaling_factor,
+    )
+    if gc_output is not None:
+        from sglang.srt.layers.moe.token_dispatcher.standard import (
+            StandardCombineInput,
+        )
+
+        return StandardCombineInput(hidden_states=gc_output)
+
     runner_input = HummingRunnerInput(
         hidden_states=hidden_states,
         topk_weights=topk_weights,
