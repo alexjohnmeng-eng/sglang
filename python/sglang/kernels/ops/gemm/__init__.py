@@ -649,3 +649,11 @@ register_kernel(
         capabilities=_SM90,
     )
 )
+register_kernel(
+    KernelSpec(
+        op="gemm.lm_head_swapab_gemm",
+        backend=KernelBackend.TRITON,
+        target="sglang.kernels.ops.gemm.fp8_lm_head_swapab:lm_head_swapab_gemm",
+        capabilities=_SM90,
+    )
+)

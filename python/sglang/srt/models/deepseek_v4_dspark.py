@@ -29,6 +29,10 @@ from sglang.srt.layers.linear import ReplicatedLinear
 from sglang.srt.layers.logits_processor import LogitsProcessorOutput
 from sglang.srt.layers.moe.utils import get_num_fused_shared_experts
 from sglang.srt.layers.quantization.base_config import QuantizationConfig
+from sglang.srt.layers.quantization.fp8_lm_head import (
+    attach_fp8_lm_head,
+    resolve_fp8_lm_head_use,
+)
 from sglang.srt.layers.quantization.modelslim.modelslim import (
     remap_dspark_weight_name_npu,
 )
@@ -818,6 +822,7 @@ class DeepseekV4ForCausalLMDSpark(nn.Module):
             self.embed_tokens: Optional[nn.Module] = None
             self.lm_head: Optional[nn.Module] = None
         self._use_fp32_lm_head = envs.SGLANG_DSPARK_FP32_LM_HEAD.get()
+        self._fp8_lm_head_use = resolve_fp8_lm_head_use()
         self._opt_markov_w2_tp_shard = envs.SGLANG_DSPARK_OPT_MARKOV_W2_TP_SHARD.get()
         if self.lm_head is not None:
             self.markov_head.configure_tp_shard(lm_head=self.lm_head)
@@ -833,6 +838,8 @@ class DeepseekV4ForCausalLMDSpark(nn.Module):
             self.embed_tokens = embed_tokens
             self.lm_head = lm_head
         self.markov_head.configure_tp_shard(lm_head=self.lm_head)
+        if self._fp8_lm_head_use.draft and self.lm_head.fp8_head is None:
+            attach_fp8_lm_head(self.lm_head, use=self._fp8_lm_head_use)
 
     def project_target_hidden(self, main_hidden: torch.Tensor) -> torch.Tensor:
         stage0 = self.stages[0]
@@ -996,7 +1003,9 @@ class DeepseekV4ForCausalLMDSpark(nn.Module):
         last = self.stages[-1]
         x = last.norm(x_post_hc)
         weight = self.lm_head.weight
-        if self._use_fp32_lm_head and weight.is_floating_point():
+        if self._fp8_lm_head_use.draft:
+            local_logits = self.lm_head.fp8_head(x)
+        elif self._use_fp32_lm_head and weight.is_floating_point():
             local_logits = F.linear(x.float(), weight.float())
         else:
             local_logits = project_through_lm_head(x, self.lm_head)

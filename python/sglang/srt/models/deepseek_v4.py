@@ -114,6 +114,10 @@ from sglang.srt.layers.moe.utils import (
     uses_per_rank_fused_shared_slots,
 )
 from sglang.srt.layers.quantization.fp8 import Fp8Config, Fp8LinearMethod
+from sglang.srt.layers.quantization.fp8_lm_head import (
+    attach_fp8_lm_head,
+    resolve_fp8_lm_head_use,
+)
 from sglang.srt.layers.quantization.fp8_utils import (
     Mxfp8DenseGemmBackend,
     view_aiter_fused_rms_transposed_fp8_scale,
@@ -5149,7 +5153,11 @@ class DeepseekV4ForCausalLM(
                 )
         else:
             self.lm_head = PPMissingLayer()
-        self.logits_processor = LogitsProcessor(config)
+        self.fp8_lm_head_use = resolve_fp8_lm_head_use()
+        self.logits_processor = LogitsProcessor(
+            config,
+            use_fp8_lm_head=self.fp8_lm_head_use.target and self.pp_group.is_last_rank,
+        )
         # Owner-scattered CP input embedding (cp_shard_input_embeds).
         self.cp_embed_scatter = (
             _is_cuda and is_dsa_enable_prefill_cp() and dsv41_sm90_on("cp")
@@ -5636,6 +5644,14 @@ class DeepseekV4ForCausalLM(
     def post_load_weights(self, is_nextn=False, weight_names=None):
         if self.wo_a_fp8:
             self._setup_fp8_wo_a_scales(is_nextn)
+        # The DSpark draft shares this head; building its FP8 copy here, before the
+        # KV pool is sized, keeps the copy out of the draft's capture headroom.
+        if (
+            not is_nextn
+            and (self.logits_processor.use_fp8_lm_head or self.fp8_lm_head_use.draft)
+            and self.pp_group.is_last_rank
+        ):
+            attach_fp8_lm_head(self.lm_head, use=self.fp8_lm_head_use)
 
         for module in self.modules():
             if isinstance(module, MQALayer):
@@ -6241,6 +6257,11 @@ class DeepseekV4ForCausalLM(
         del self.lm_head.weight
         self.model.embed_tokens.weight = embed
         self.lm_head.weight = head
+        if (
+            isinstance(self.lm_head, ParallelLMHead)
+            and self.lm_head.fp8_head is not None
+        ):
+            self.lm_head.fp8_head.requantize_(head)
         # Hot weight reload (RL workflows). Use the device-agnostic module
         # accessor so this works on both CUDA/HIP and NPU.
         torch.get_device_module().empty_cache()
