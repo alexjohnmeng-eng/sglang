@@ -58,6 +58,30 @@ def _raw_scale_bytes(scale: torch.Tensor) -> torch.Tensor:
     raise TypeError(f"unsupported MXFP4 scale dtype {scale.dtype}")
 
 
+def _checkpoint_to_marlin_bytes(packed: torch.Tensor) -> torch.Tensor:
+    """Transpose eight checkpoint nibbles into one Marlin four-byte word."""
+    packed = packed.contiguous().view(torch.uint8)
+    if packed.shape[-1] % 4:
+        raise ValueError(f"packed MXFP4 K dimension is not word aligned: {packed.shape}")
+    words = packed.view(*packed.shape[:-1], -1, 4)
+    low = words & 0x0F
+    high = words >> 4
+    codes = torch.stack(
+        (
+            low[..., 0],
+            high[..., 0],
+            low[..., 1],
+            high[..., 1],
+            low[..., 2],
+            high[..., 2],
+            low[..., 3],
+            high[..., 3],
+        ),
+        dim=-1,
+    )
+    return ((codes[..., :4] << 4) | codes[..., 4:]).reshape_as(packed)
+
+
 def prepare_layer(layer: torch.nn.Module) -> bool:
     """Prepare one EP8 layer, returning whether the conversion succeeded."""
     if not available():
@@ -69,8 +93,8 @@ def prepare_layer(layer: torch.nn.Module) -> bool:
     try:
         from flashinfer.megamoe import transform_mxfp4_weights_for_mega_moe
 
-        w13 = layer.w13_weight.data.contiguous().view(torch.uint8)
-        w2 = layer.w2_weight.data.contiguous().view(torch.uint8)
+        w13 = _checkpoint_to_marlin_bytes(layer.w13_weight.data)
+        w2 = _checkpoint_to_marlin_bytes(layer.w2_weight.data)
         w13_scale = _raw_scale_bytes(layer.w13_weight_scale_inv.data)
         w2_scale = _raw_scale_bytes(layer.w2_weight_scale_inv.data)
         if w13.shape[1:] != (4608, 2560) or w2.shape[1:] != (5120, 1152):
