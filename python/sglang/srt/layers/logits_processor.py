@@ -106,6 +106,18 @@ VERIFY_FULL_LOGITS = "full_logits"
 VERIFY_LOGITS_VARIANTS = (VERIFY_VOCAB_SHARDS, VERIFY_FULL_LOGITS)
 
 
+def _runtime_optimized_vocab_shards_enabled() -> bool:
+    return envs.SGLANG_ENABLE_NV_MEGA_RUNTIME_OPTIMIZATION.get()
+
+
+def _aiter_lm_head_ok(hidden_states: torch.Tensor, weight: torch.Tensor) -> bool:
+    return False
+
+
+def _gfx1250_lmhead_applies(x: torch.Tensor, w: torch.Tensor) -> bool:
+    return False
+
+
 class SamplingMaskStatus(IntEnum):
     """Ordered by severity so distributed MAX reaches one policy decision."""
 
@@ -336,6 +348,16 @@ class LogitsProcessorOutput:
 
 
 @dataclasses.dataclass
+def extend_reads_input_logprobs(forward_batch: ForwardBatch) -> bool:
+    return forward_batch.return_logprob and any(
+        extend_len > start_len
+        for extend_len, start_len in zip(
+            forward_batch.extend_seq_lens_cpu,
+            forward_batch.extend_logprob_start_lens_cpu,
+        )
+    )
+
+
 class LogitsMetadata:
     forward_mode: ForwardMode
     capture_hidden_mode: CaptureHiddenMode = CaptureHiddenMode.NULL
