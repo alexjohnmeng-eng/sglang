@@ -7,9 +7,10 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Protocol, TypeVar
 import msgspec
 import torch
 
-from sglang.srt.utils.common import async_h2d
+from sglang.srt.utils.common import async_h2d, ceil_align, ceil_div
 
 if TYPE_CHECKING:
+    from sglang.srt.distributed.parallel_state import GroupCoordinator
     from sglang.srt.layers.attention.dsv4.dsv41_sparse import DeepseekV41Indexer
     from sglang.srt.layers.attention.dsv4.metadata import PagedIndexerMetadata
 
@@ -30,6 +31,26 @@ def get_tail_row_indices(
 class CandidateMetadata:
     def tail(self, rows_per_request: List[int]) -> CandidateMetadata:
         raise NotImplementedError(f"{type(self).__name__} is not a prefill publish")
+
+
+class RowShard(msgspec.Struct, frozen=True, kw_only=True):
+    group: "GroupCoordinator"
+    rank: int
+    world: int
+    row_align: int
+
+    def rows_per_rank(self, num_rows: int) -> int:
+        return ceil_align(ceil_div(num_rows, self.world), self.row_align)
+
+    def local_rows(self, num_rows: int) -> slice:
+        per = self.rows_per_rank(num_rows)
+        start = min(self.rank * per, num_rows)
+        return slice(start, min(start + per, num_rows))
+
+    def gather(self, local: torch.Tensor, num_rows: int) -> torch.Tensor:
+        gathered = local.new_empty((self.world * local.shape[0], *local.shape[1:]))
+        self.group.all_gather_into_tensor(gathered, local.contiguous())
+        return gathered[:num_rows]
 
 
 class PrefillInputs(msgspec.Struct, frozen=True, kw_only=True):
