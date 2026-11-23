@@ -1,6 +1,7 @@
 import asyncio
 import itertools
 import logging
+import math
 import random
 import threading
 import time
@@ -12,7 +13,7 @@ from collections import OrderedDict, defaultdict
 from contextlib import asynccontextmanager
 from enum import IntEnum
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
 import aiohttp
 import numpy as np
@@ -1920,6 +1921,38 @@ def _view_pool_buffer_by_modality(raw_buffer, embedding_data, dtype):
     }
 
 
+class WaitingListSync:
+    """Collectives over the scheduler ranks that share one waiting list: the
+    TP group without DP attention, one DP shard (attn-TP x attn-CP) with it.
+    No single group spans both shard factors, so each collective runs along
+    every factor in turn; ranks of other DP shards hold other requests."""
+
+    def __init__(self, groups: Sequence[Any] = ()):
+        self._groups = [group for group in groups if group.world_size > 1]
+        self.size = math.prod(group.world_size for group in self._groups)
+
+    @classmethod
+    def for_scheduler(cls, parallel) -> "WaitingListSync":
+        # The ranks that receive the same work requests (SchedulerRequestReceiver).
+        if parallel.attn_dp_enabled:
+            return cls((parallel.attn_tp_group, parallel.attn_cp_group))
+        return cls((parallel.tp_group,))
+
+    def all_reduce_min_(self, tensor: torch.Tensor) -> None:
+        for group in self._groups:
+            torch.distributed.all_reduce(
+                tensor, op=torch.distributed.ReduceOp.MIN, group=group.cpu_group
+            )
+
+    def all_gather_object(self, obj: Any) -> List[Any]:
+        values = [obj]
+        for group in self._groups:
+            values = [
+                value for part in group.all_gather_object(values) for value in part
+            ]
+        return values
+
+
 class MMReceiverBase(ABC):
     def __init__(
         self,
@@ -1950,8 +1983,11 @@ class MMReceiverBase(ABC):
         parallel = get_parallel()
         self.pp_rank = parallel.pp_rank if scheduler is not None else None
         self.tp_rank = parallel.tp_rank if scheduler is not None else None
-        self.tp_size = parallel.tp_size
-        self.tp_group = parallel.tp_group if scheduler is not None else None
+        self.waiting_list_sync = (
+            WaitingListSync.for_scheduler(parallel)
+            if scheduler is not None
+            else WaitingListSync()
+        )
         self.nnodes = get_parallel().nnodes
         self.hostname = get_local_ip_auto()
         self.waiting_list: List[WaitingMMRequestBase] = []
@@ -2316,10 +2352,10 @@ class MMReceiverBase(ABC):
         ``error_msg`` / ``error_code``. attn_tp_rank 0 streams the abort to the
         client, so merge the best-known payload from all ranks first.
         """
-        if self.tp_size <= 1 or self.tp_group is None:
+        if self.waiting_list_sync.size <= 1:
             return
 
-        gathered = self.tp_group.all_gather_object(
+        gathered = self.waiting_list_sync.all_gather_object(
             (waiting_req.error_msg, waiting_req.error_code)
         )
         best_msg = waiting_req.error_msg
@@ -2403,7 +2439,7 @@ class MMReceiverBase(ABC):
                         encoder_urls=encode_urls,
                         model_type=self.model_type,
                         host_name=self.hostname,
-                        receive_count=self.tp_size,
+                        receive_count=self.waiting_list_sync.size,
                         zmq_context=(
                             None
                             if self.scheduler_recv_socket is not None
@@ -2424,8 +2460,8 @@ class MMReceiverBase(ABC):
                 # exactly the same requests. Agree on startup before appending.
                 rank_errors = (
                     [local_error]
-                    if self.tp_size <= 1
-                    else self.tp_group.all_gather_object(local_error)
+                    if self.waiting_list_sync.size <= 1
+                    else self.waiting_list_sync.all_gather_object(local_error)
                 )
                 failed_ranks = [
                     rank for rank, error in enumerate(rank_errors) if error is not None
@@ -2487,11 +2523,7 @@ class MMReceiverBase(ABC):
 
         local_status = torch.tensor(local_status, device="cpu", dtype=torch.int32)
 
-        torch.distributed.all_reduce(
-            local_status,
-            op=torch.distributed.ReduceOp.MIN,
-            group=self.tp_group.cpu_group,
-        )
+        self.waiting_list_sync.all_reduce_min_(local_status)
 
         new_waiting = []
         for i, waiting_req in enumerate(self.waiting_list):
