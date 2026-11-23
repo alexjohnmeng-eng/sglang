@@ -5,7 +5,7 @@ ulimit -c 0
 
 tools_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(git -C "$tools_dir" rev-parse --show-toplevel)
-base_revision=7f9566cb967ad55fb24197a38a7fdcc36d45db4f
+source_revision=$(git -C "$repo_dir" rev-parse --verify "${PREFILL_REVISION:-HEAD}^{commit}")
 expected_image=sha256:f3a303d4028dc4597e312c96ada28fa19509f46559601a94e89dc630ac1ef152
 image=${PREFILL_IMAGE:-lmsysorg/sglang:latest}
 model=${PREFILL_MODEL_DIR:-/data1/fjmeng2/models/DeepSeek-V4.1-Flash-1017}
@@ -25,14 +25,10 @@ mkdir -- "$output"
 output=$(realpath "$output")
 mkdir "$output/source" "$output/tools"
 cp -a "$tools_dir/." "$output/tools/"
-git -C "$repo_dir" archive "$base_revision" > "$output/source.tar"
+git -C "$repo_dir" archive "$source_revision" > "$output/source.tar"
 tar -xf "$output/source.tar" -C "$output/source"
 rm "$output/source.tar"
-# Output may itself live inside a different Git repo. Stop discovery there;
-# otherwise git apply can silently skip every path relative to that parent repo.
-GIT_CEILING_DIRECTORIES="$output" git -C "$output/source" apply --unidiff-zero --check "$output/tools/compatibility.patch"
-GIT_CEILING_DIRECTORIES="$output" git -C "$output/source" apply --unidiff-zero "$output/tools/compatibility.patch"
-python3 "$output/tools/manifest.py" source "$output" "$base_revision"
+python3 "$output/tools/manifest.py" source "$output" "$source_revision"
 git -C "$repo_dir" rev-parse HEAD > "$output/tools_revision.txt"
 git -C "$repo_dir" status --short > "$output/checkout_status.txt"
 if [[ "$mode" == --prepare-only ]]; then

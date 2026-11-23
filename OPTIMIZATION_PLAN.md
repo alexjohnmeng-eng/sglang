@@ -365,3 +365,35 @@ compatibility commit, not a claim of another throughput improvement. The
 reproduction launcher will export a committed revision directly and drop
 compatibility.patch and patch-specific manifest logic. Clean-source full
 prefill/profile validation is recorded in the follow-up entry.
+
+
+## 2026-11-23: Prefill directly from committed source, no applied patch
+
+Runtime adapters are committed as
+`378dd4b110be92a41ffce162c4afdb671e9a0140`. The reproduction launcher now exports
+the selected commit directly (HEAD by default, optional PREFILL_REVISION),
+records source_revision and per-file SHA256, and applies no patches.
+compatibility.patch and all patch-application/verification code are removed.
+
+Full fresh-container run: `repro/1123-no-patch-full/`; wrapper log:
+`repro/1123-no-patch-wrapper.log`. The source manifest records the runtime commit
+above, and dependency-version mismatches are empty. Preparation also checked
+that all eleven runtime adapter files equal that committed source.
+
+| Input tokens | Median TTFT ms | Input tok/s | Samples |
+| ---: | ---: | ---: | ---: |
+| 65,536 | 857.227 | 76451.20 | 5 |
+| 262,144 | 3528.738 | 74288.33 | 5 |
+
+Both lengths used the unchanged Ant configuration, radix cache disabled,
+output=1, concurrency=1, ten warmups per length and five timed samples. All
+thirty warmup/sample requests and two separate GPU-only profile requests passed
+the exact input/cache/output checks. All sixteen TP rank traces completed;
+completed.json is true, the wrapper exited **0**, and automatic container
+cleanup succeeded. This confirms reproduction from committed runtime code
+retains the earlier performance; no extra optimization gain is claimed.
+
+Script lint/format/syntax and applicable pre-commit checks also passed. The
+original four stale deferred-KV epilogue cases remain documented in the prior
+entry; this run does not claim those tests or fake-prefill decode were fixed.
+All paths above are relative to `/data1/fjmeng2/dsv41-runtime/`.

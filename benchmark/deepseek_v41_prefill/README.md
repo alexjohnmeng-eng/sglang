@@ -26,6 +26,7 @@ PREFILL_OUTPUT=/data1/fjmeng2/dsv41-runtime/repro/$(date -u +%Y%m%dT%H%M%SZ) \
 | --- | --- |
 | `PREFILL_MODEL_DIR` | `/data1/fjmeng2/models/DeepSeek-V4.1-Flash-1017`，只读挂载 |
 | `PREFILL_IMAGE` | `lmsysorg/sglang:latest`，严格校验下述 image ID |
+| `PREFILL_REVISION` | `HEAD`，导出该已提交 revision 的源码 |
 | `PREFILL_OUTPUT` | `/data1/fjmeng2/dsv41-runtime/repro/<UTC时间>`，必须不存在 |
 | `PREFILL_DEPS_DIR` | `/data1/fjmeng2/dsv41-runtime/fa3-pylibs` |
 | `PREFILL_CACHE_DIR` | `/data1/fjmeng2/dsv41-runtime/sglang-cache-migrated` |
@@ -40,7 +41,7 @@ PREFILL_OUTPUT=/data1/fjmeng2/dsv41-runtime/repro/$(date -u +%Y%m%dT%H%M%SZ) \
 和 `sgl-fa3==0.1.0`（需要包源网络）。运行时会核验实际版本，依赖不匹配直接失败。
 不要把 `humming-pylibs` 0.1.18 加到 `PYTHONPATH` 前面；这会禁用已对齐的 0.1.12 overlay/tuning。
 
-## 镜像、源码与兼容性补丁
+## 镜像与源码
 
 验证镜像的不可变 image ID：
 
@@ -54,19 +55,14 @@ sha256:f3a303d4028dc4597e312c96ada28fa19509f46559601a94e89dc630ac1ef152
 与已验证 image ID 不同的镜像；`PREFILL_ALLOW_IMAGE_MISMATCH=1` 仅跳过 image ID 检查，
 仍检查依赖版本，应作为新环境实验记录。
 
-**此前成功测试依赖未提交的 13 个兼容/诊断文件，只有性能 commit 的干净源码不足以复现。**
-因此 `run.sh` 固定导出性能 commit
-`7f9566cb967ad55fb24197a38a7fdcc36d45db4f`，然后在输出目录的 `source/` 应用
-[compatibility.patch](compatibility.patch)。该补丁逐字保存已测试工作树的额外修改：
+兼容性修复已直接提交到分支源码中。`run.sh` 默认解析启动时的 `HEAD`，
+通过 `git archive` 将该 commit 原样导出到独立的 `source/` 目录后运行。
+可用 `PREFILL_REVISION=<完整commit>` 固定复现版本；请选择包含这些兼容修复的版本。
+脚本不再应用 patch，也不依赖工作树中未提交的模型代码。
+`source_manifest.json` 保存 `source_revision` 和完整源码逐文件 SHA256，
+同时记录本次使用的复现脚本哈希。
 
-- row_argmax 入口、Humming 可选 metadata、runner ID alias、旧 metadata 参数兼容。
-- CP tail 全局索引、draft CUDA metadata、DSPARK planner/input API 适配。
-- 持久输出 ownership，以及此前 fake-prefill/draft graph 诊断开关。
-
-补丁是实验复现依赖快照；本次只验证本页的 prefill 配置，不证明 fake-prefill decode
-或其他并行布局正确。它不会应用到用户工作树，也不作为新的独立性能优化结论。
-输出 `source_manifest.json` 保存基础 revision、补丁哈希、完整源码逐文件 SHA256，
-不依赖外部临时启动脚本或用户工作树中未提交的代码。
+本页只验证指定的 prefill 配置；fake-prefill decode 和其他并行布局需要单独测试。
 
 仅准备源码、不用 GPU/Docker：
 

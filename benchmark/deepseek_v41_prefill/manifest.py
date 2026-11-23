@@ -14,33 +14,10 @@ def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def verify_patch(root):
-    """Reject a skipped/partial patch even when git apply returned success."""
-    verified = []
-    name = None
-    for line in (root / "tools/compatibility.patch").read_text().splitlines():
-        if line.startswith("diff --git "):
-            name = line.split(" b/", 1)[1]
-        elif line.startswith("index "):
-            expected = line.split()[1].split("..")[1]
-            data = (root / "source" / name).read_bytes()
-            blob = b"blob " + str(len(data)).encode() + b"\0" + data
-            actual = hashlib.sha1(blob, usedforsecurity=False).hexdigest()
-            if not actual.startswith(expected):
-                raise RuntimeError(f"Compatibility patch not applied exactly: {name}")
-            verified.append(name)
-    if not verified:
-        raise RuntimeError("Empty compatibility patch")
-    return verified
-
-
 def source_manifest(root, revision):
-    verified = verify_patch(root)
     files = sorted(p for p in (root / "source").rglob("*") if p.is_file())
     return {
-        "base_revision": revision,
-        "compatibility_patch_sha256": sha256(root / "tools/compatibility.patch"),
-        "verified_compatibility_files": verified,
+        "source_revision": revision,
         "source_files_sha256": {
             str(p.relative_to(root / "source")): sha256(p) for p in files
         },
