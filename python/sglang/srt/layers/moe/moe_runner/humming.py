@@ -364,7 +364,9 @@ class HummingRunnerCore(MoeRunnerCore):
         if expected_m is not None:
             return expected_m * self.num_experts
 
-        # TODO: update for EP and DP
+        # Keys count all input route slots, including invalid EP entries.
+        # EP-specific tables use this same key, measured against actual local
+        # expert loads; rescaling it alone would mismatch alignment and launch.
         return topk_ids.nelement()
 
     def get_buffer_metas(

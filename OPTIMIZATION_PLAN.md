@@ -435,3 +435,64 @@ input and FP8 target LM head, DSPARK block5, memory.85, graph32, workers8:
 Artifacts: /data1/fjmeng2/dsv41-runtime/repro/1123-dp8ep8-opt/ and
 1123-decode-reanalysis/matrix/local-ep8-{accuracy-}comm-pull-wired/.
 Future E48 tile experiments remain separate from this communication change.
+
+## 2026-11-23: E48 Humming tuning for DP8/EP8 decode
+
+The original E48 expert GEMMs selected large M tiles, while a table targeting
+only 2304 route slots missed padded graph buckets. Add a tied M32 W13/W2 pair
+at exactly 2304, 2880 and 3456 global route slots (384/480/576 rows, top-k 6).
+These cover 8/10/12 requests per attention-DP rank with DSPARK block size 5.
+The estimator continues to count invalid EP entries. Other E48 sizes retain
+Humming 0.1.12 heuristics; EP4 E96 and draft E16 table entries are unchanged.
+FP8 input, MXFP4 group-32 weights, FP32 accumulation and disabled stream-K
+remain the measured settings.
+
+Matched H20x8 deployment: TP8, attention-DP8 (dp_size=1, attn_dp_size=8),
+EP4 or EP8, Engram host per_rank, Humming 0.1.12/bm32, FP8 target LM head,
+DSPARK block5, memory .85, graph max batch32, max requests256, tokenizer
+workers8. Performance uses decode-only fake prefill, 64 requests with exactly
+65536 input IDs and 1024 output tokens, zero cached tokens, simulated
+acceptance4.5, one warmup and three repetitions per scheduling scenario.
+Accuracy uses real prefill in unified mode, with simulation disabled.
+
+| Scheduling | EP8 communication-only tok/s | EP8 tuned tok/s | Gain | EP4 same-source tok/s |
+| --- | ---: | ---: | ---: | ---: |
+| Balanced (8 per DP rank) | 7456.037 | 10047.817 | 34.76% | 10501.897 |
+| Skewed | 7352.647 | 8707.808 | 18.43% | 7752.440 |
+| Natural | 7415.114 | 9999.811 | 34.86% | 10693.802 |
+
+GPU-only profiles and separate stack mapping captures completed for both EP
+configurations, including skewed GPU captures. Real-checkpoint operator checks
+covered representative, high-total-load and hot-expert routes, changed inputs
+and graph replays. Supplemental padded 480/576-row checks passed. Shipped-table
+and selection checks passed (10 tests plus 20 subtests). A legacy runner suite
+has 12 fixture errors from missing HummingMethod.may_process_input in pinned
+Humming 0.1.12; the same failure reproduces on the pre-change source.
+
+Full GSM8K (EvalScope1.15.0, 4-shot, temperature0, max2048, concurrency64):
+
+- EP8 tuned: 1277/1319 = 96.8158%, zero request/scoring errors; two max-token stops.
+- EP4 same source: 1277/1319 = 96.8158%, zero request/scoring errors; one max-token stop.
+- EP8 communication-only: 1281/1319 = 97.1190%. The tuned result has four fewer
+  correct answers (-0.3033 percentage points); paired-answer attribution remains
+  unresolved. This experiment branch is published at the user's request and
+  does not establish accuracy parity or production readiness.
+
+Unified role=mix does not exercise decode-only pull; its separate numerical
+and graph coverage is described in the communication entry above. The
+final_matrix_completed.json adopt_e48 field records a performance gate only.
+
+Tested source: /data1/fjmeng2/dsv41-runtime/repro/1123-dp8ep8-opt/07-e48-padded-buckets/source.
+Both changed runtime files match that tested snapshot byte-for-byte.
+Artifacts under /data1/fjmeng2/dsv41-runtime/repro/:
+
+- 1123-decode-reanalysis/matrix/local-ep8-comm-reference-scenarios/
+- 1123-decode-reanalysis/matrix/local-ep8-e48-padded-final/
+- 1123-decode-reanalysis/matrix/local-ep8-accuracy-e48-padded-final/
+- 1123-decode-reanalysis/matrix/local-ep4-both-supported-final/
+- 1123-decode-reanalysis/matrix/local-ep4-accuracy-both-supported-final/
+- 1123-dp8ep8-opt/{final-matrix-run.log,final_scenario_gains.json,pull_arrival_analysis.json}
+
+Next: compare paired GSM8K answers and truncations before claiming accuracy
+alignment, then use matched all-rank kernel timelines to investigate residual
+EP8/EP4 differences and EP4's skewed scheduling cost.
