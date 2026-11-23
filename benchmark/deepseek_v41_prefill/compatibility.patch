@@ -1,0 +1,168 @@
+diff --git a/python/sglang/kernels/ops/speculative/row_argmax.py b/python/sglang/kernels/ops/speculative/row_argmax.py
+index 7e025ca9e6..a86e26f27c 100644
+--- a/python/sglang/kernels/ops/speculative/row_argmax.py
++++ b/python/sglang/kernels/ops/speculative/row_argmax.py
+@@ -118,0 +119,6 @@ def _medium_row_argmax(x, divisor=None, divisor_min=None, ignore_nan=False):
++
++
++def row_argmax(x: torch.Tensor) -> torch.Tensor:
++    """Row-wise argmax for FP32 speculative logits."""
++    assert x.dim() == 2 and x.dtype == torch.float32 and x.stride(1) == 1
++    return _medium_row_argmax(x)
+diff --git a/python/sglang/srt/arg_groups/deepseek_v4_hook.py b/python/sglang/srt/arg_groups/deepseek_v4_hook.py
+index 14ebb538e6..a68f5b2776 100644
+--- a/python/sglang/srt/arg_groups/deepseek_v4_hook.py
++++ b/python/sglang/srt/arg_groups/deepseek_v4_hook.py
+@@ -413 +413,3 @@ def validate_deepseek_v41_features(server_args: ServerArgs) -> None:
+-            or cfg.disaggregation_transfer_backend not in ("mooncake", "nixl", "mori")
++            # ``fake`` is used for local decode-only/fake-prefill benchmarks;
++            # it does not transfer KV but must still use the static verify path.
++            or cfg.disaggregation_transfer_backend not in ("mooncake", "nixl", "mori", "fake")
+diff --git a/python/sglang/srt/environ.py b/python/sglang/srt/environ.py
+index c24a6df0bb..8766f1ac8b 100644
+--- a/python/sglang/srt/environ.py
++++ b/python/sglang/srt/environ.py
+@@ -592,0 +593,3 @@ class Envs:
++    # A/B switch for the DSpark draft decode CUDA graph.  Keep the target
++    # verify graph enabled while isolating draft graph replay issues.
++    SGLANG_DSPARK_DRAFT_DECODE_GRAPH = EnvBool(True)
+diff --git a/python/sglang/srt/layers/attention/deepseek_v4_backend.py b/python/sglang/srt/layers/attention/deepseek_v4_backend.py
+index 308c5fc9bb..a5da91f621 100644
+--- a/python/sglang/srt/layers/attention/deepseek_v4_backend.py
++++ b/python/sglang/srt/layers/attention/deepseek_v4_backend.py
+@@ -970,0 +971,2 @@ class LateLayerTail(msgspec.Struct, frozen=True):
++    # Original extend rows in global request order; token_indices is rank-local under CP.
++    global_token_indices: Optional[torch.Tensor] = None
+@@ -2150,0 +2153 @@ class DeepseekV4AttnBackend(
++                global_token_indices=token_indices,
+@@ -2220,0 +2224 @@ class DeepseekV4AttnBackend(
++                global_token_indices=token_indices,
+@@ -2491,4 +2495,6 @@ class DeepseekV4AttnBackend(
+-        elif self.sm90_decode:
+-            # On CUDA the block prep reads only the device lengths (the host ones feed
+-            # the torch expand fallback): no copy that waits on the last verify. The
+-            # metadata glue that avoids it otherwise is off under prefill CP.
++        elif _is_cuda:
++            # CUDA graph replay owns device-side sequence lengths.  Reading them
++            # with ``tolist`` would synchronize/copy during capture and can surface
++            # as an illegal address after the preceding draft graph.  The uniform
++            # block planner supports device-only lengths and only needs host lengths
++            # for the non-CUDA expand fallback.
+@@ -3216 +3222,4 @@ class DeepseekV4AttnBackend(
+-        self, forward_batch: ForwardBatch, *, num_qo_tokens: int
++        self,
++        forward_batch: ForwardBatch,
++        *,
++        num_qo_tokens: Optional[int] = None,
+@@ -3229,0 +3239,4 @@ class DeepseekV4AttnBackend(
++        if num_qo_tokens is None:
++            # Older runner APIs did not pass the query-token count to this hook.
++            # The extend positions cover the same rows for the eager path.
++            num_qo_tokens = int(forward_batch.positions.shape[0])
+diff --git a/python/sglang/srt/layers/logits_processor.py b/python/sglang/srt/layers/logits_processor.py
+index 5bb204387a..1be029bae4 100644
+--- a/python/sglang/srt/layers/logits_processor.py
++++ b/python/sglang/srt/layers/logits_processor.py
+@@ -79,0 +80 @@ from sglang.srt.utils.common import (
++    async_d2h,
+@@ -332,0 +334,17 @@ class LogitsProcessorOutput:
++    def own_customized_info(self) -> None:
++        """Detach typed customized-info rows from persistent CUDA buffers."""
++        if not self.customized_info:
++            return
++        owned = dict(self.customized_info)
++        ready = None
++        for key, value in owned.items():
++            if isinstance(value, _TypedCustomizedInfo):
++                rows = value.rows
++                if isinstance(rows, torch.Tensor) and rows.device.type != "cpu":
++                    if ready is None:
++                        ready = torch.get_device_module(rows.device).Event()
++                    owned[key] = type(value)(async_d2h(rows), ready)
++        if ready is not None:
++            ready.record()
++        self.customized_info = owned
++
+diff --git a/python/sglang/srt/layers/moe/moe_runner/humming.py b/python/sglang/srt/layers/moe/moe_runner/humming.py
+index cc85bfade0..6165704a4f 100644
+--- a/python/sglang/srt/layers/moe/moe_runner/humming.py
++++ b/python/sglang/srt/layers/moe/moe_runner/humming.py
+@@ -171 +171 @@ def humming_quant_input_rows(
+-        or meta.mma_type == MmaType.MXMMA
++        or getattr(meta, "mma_type", None) == MmaType.MXMMA
+diff --git a/python/sglang/srt/managers/utils.py b/python/sglang/srt/managers/utils.py
+index 1ba9f04288..ed84a3765a 100644
+--- a/python/sglang/srt/managers/utils.py
++++ b/python/sglang/srt/managers/utils.py
+@@ -174,0 +175,6 @@ class GenerationBatchResult:
++    # Owner of graph-persistent token/accept buffers used by folded DSpark.
++    # Kept alive until the result copy has completed.
++    persistent_result_copy_owner: Optional[Any] = dataclasses.field(
++        default=None, repr=False, compare=False
++    )
++
+diff --git a/python/sglang/srt/model_executor/model_runner.py b/python/sglang/srt/model_executor/model_runner.py
+index 3847368afc..781095aee6 100644
+--- a/python/sglang/srt/model_executor/model_runner.py
++++ b/python/sglang/srt/model_executor/model_runner.py
+@@ -1018,0 +1019,3 @@ class ModelRunner:
++        # Compatibility alias for the DSpark KV-plan API used by the Ant
++        # migration. RunnerIds provides the same plan/bind/read operations.
++        self.kv_index_translator = self.runner_ids
+diff --git a/python/sglang/srt/models/deepseek_v4.py b/python/sglang/srt/models/deepseek_v4.py
+index ce268a107d..9321709d20 100644
+--- a/python/sglang/srt/models/deepseek_v4.py
++++ b/python/sglang/srt/models/deepseek_v4.py
+@@ -2904,13 +2903,0 @@ class MQALayer(MqaAttentionBase):
+-        metadata = attn_backend.forward_metadata
+-        if (
+-            isinstance(metadata, DSV4Metadata)
+-            and metadata.real_num_tokens is not None
+-            and x.shape[0] > metadata.real_num_tokens
+-        ):
+-            return self._forward_real_rows(
+-                x,
+-                positions,
+-                forward_batch,
+-                real_num_tokens=metadata.real_num_tokens,
+-                defer_all_reduce=defer_all_reduce,
+-            )
+diff --git a/python/sglang/srt/speculative/dflash_info.py b/python/sglang/srt/speculative/dflash_info.py
+index 4a7db4f2ea..9dad5115bf 100644
+--- a/python/sglang/srt/speculative/dflash_info.py
++++ b/python/sglang/srt/speculative/dflash_info.py
+@@ -58,0 +59,3 @@ class DFlashVerifyInput(SpecInput):
++    # Ant DSpark names the same plan ``kv_loc_plan``/``kv_loc_cols``.
++    kv_loc_plan: Optional[IterationIds] = None
++    kv_loc_cols: Optional[Cols] = None
+@@ -61,0 +65,4 @@ class DFlashVerifyInput(SpecInput):
++        if self.iteration_ids is None and self.kv_loc_plan is not None:
++            self.iteration_ids = self.kv_loc_plan
++        if self.iteration_cols is None and self.kv_loc_cols is not None:
++            self.iteration_cols = self.kv_loc_cols
+diff --git a/python/sglang/srt/speculative/dspark_components/dspark_planner.py b/python/sglang/srt/speculative/dspark_components/dspark_planner.py
+index e2af5f5a05..9496fb2525 100644
+--- a/python/sglang/srt/speculative/dspark_components/dspark_planner.py
++++ b/python/sglang/srt/speculative/dspark_components/dspark_planner.py
+@@ -67 +67 @@ class VerifyWindow(msgspec.Struct, frozen=True):
+-    iteration_ids: IterationIds
++    kv_loc_plan: IterationIds
+@@ -917 +917 @@ def alloc_verify_window(
+-        iteration_ids=plan,
++        kv_loc_plan=plan,
+diff --git a/python/sglang/srt/speculative/dspark_components/dspark_worker_v2.py b/python/sglang/srt/speculative/dspark_components/dspark_worker_v2.py
+index e9fb49955e..a839fc0c3c 100644
+--- a/python/sglang/srt/speculative/dspark_components/dspark_worker_v2.py
++++ b/python/sglang/srt/speculative/dspark_components/dspark_worker_v2.py
+@@ -619 +619,4 @@ class DSparkWorkerV2(BaseSpecWorker):
+-        capture_decode_cuda_graph = self._decode_graph_allowed
++        capture_decode_cuda_graph = (
++            self._decode_graph_allowed
++            and envs.SGLANG_DSPARK_DRAFT_DECODE_GRAPH.get()
++        )
+diff --git a/python/sglang/srt/speculative/dspark_disaggregation.py b/python/sglang/srt/speculative/dspark_disaggregation.py
+index 0d001b6bab..e4272c1e33 100644
+--- a/python/sglang/srt/speculative/dspark_disaggregation.py
++++ b/python/sglang/srt/speculative/dspark_disaggregation.py
+@@ -23,0 +24 @@ def build_dspark_disagg_draft_input(
++        vocab_size=batch.model_config.vocab_size,

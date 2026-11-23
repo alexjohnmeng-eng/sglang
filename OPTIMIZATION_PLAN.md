@@ -253,3 +253,75 @@ One commit records the four verified source repairs and this experiment log.
 Other compatibility/diagnostic worktree changes remain uncommitted on
 `tmp/ant-full-migration`; this benchmark does not validate their standalone
 portability, fake-prefill decode throughput, or alternate EP layouts.
+
+
+## 2026-11-23: Complete prefill reproduction scripts
+
+Entry point: `benchmark/deepseek_v41_prefill/run.sh`; full instructions and
+standalone client/profile comparison commands are in that directory's README.
+This is benchmark packaging, not another model/kernel optimization.
+
+The serving source is exported from performance commit
+`7f9566cb967ad55fb24197a38a7fdcc36d45db4f` into an isolated directory. The 13
+uncommitted compatibility/diagnostic changes used by the successful experiment
+are preserved in `compatibility.patch`, not silently assumed or staged as new
+production source changes. The zero-context patch is applied with
+`--unidiff-zero`; each patched file's resulting Git blob hash is checked.
+Patch SHA256: `75f851e9990cad127afb95d121815474d95fc463a9a1ff798edb0ffdbce79342`.
+The four performance files and 13 compatibility files were checked byte-for-byte
+against the original tested worktree.
+
+The launcher checks the immutable image ID and all nine serving package
+versions, saves launch command/environment/source/hardware manifests, and owns
+only its dedicated container. Humming remains 0.1.12 with H20-3e bm32 tables;
+the FA3/kernel dependency target is separate from the server installation.
+Exact topology is TP8/CP8/EP1. Client protocol is unchanged: seed 42 IDs,
+65536/262144 inputs, output 1, cache off, serial concurrency 1, warmup 10 and
+repeat 5 per length. Timed requests and GPU-only profiles are separate. Eight
+complete gzip rank traces per length are required for client success.
+
+Validation and failed preparation attempts are retained, not overwritten:
+
+- `repro/1123-client-smoke`: actual server client smoke test (warmup 0, repeat 1;
+  1015.501 ms cold 64K request), only a protocol check, not a performance result.
+- `repro/1123-script-full`: port preflight initially rejected a recently closed
+  socket in TIME_WAIT. Preflight now sets SO_REUSEADDR, matching server binding.
+- `repro/1123-script-full-v2`: stopped before inference after discovering that
+  the output parent is itself a Git repo and git apply had skipped paths.
+  Git discovery is now bounded with GIT_CEILING_DIRECTORIES. A negative check
+  against this directory confirms the blob verifier rejects skipped patches.
+- `repro/1123-script-full-v3`: fresh image/container and isolated source passed
+  both lengths (10 warmups + 5 samples each) and all 16 complete GPU-only traces.
+  Median TTFT was 857.039 / 3529.827 ms, 76467.89 / 74265.40 input tok/s.
+  The client wrote completed.json successfully. The outer shell exited 2 because
+  its script was edited during execution; the final wrapper verification uses
+  an immutable byte-identical copy of run.sh to avoid changing a running script.
+- `repro/1123-script-final-source`: final zero-context patch preparation passed,
+  including automatic blob verification for all 13 compatibility files.
+- `repro/1123-script-final-full`: final one-shot run exited **0**, including
+  automatic container cleanup. All 30 warmup/sample requests and two profile
+  requests passed exact-length/cache/output checks; all 16 traces completed.
+  Median TTFT: **857.278 / 3527.451 ms**; input throughput:
+  **76446.60 / 74315.42 tok/s**, for 65536 / 262144 tokens respectively.
+  Raw measurements, summary, launch command, source/runtime/image/hardware
+  manifests and server log are saved in this directory. The final compatibility
+  patch was verified automatically against all 13 expected resulting blobs.
+
+Paths above are relative to `/data1/fjmeng2/dsv41-runtime/`. The working tree's
+original 13 source modifications are preserved. Standalone kernel comparison
+also passed against the existing baseline/candidate traces and newly captured
+Ant/candidate GPU-only traces at both lengths. Reports are under
+`repro/1123-repro-vs-ant/{65536,262144}/`: mean mHC 28.772/28.779 ms (Ant/local)
+at 64K and 113.227/113.436 ms at 256K; TP0 spans 849.144/848.342 ms and
+3506.041/3503.580 ms. These are profile diagnostics, separate from unprofiled
+TTFT; kernel sums can overlap. Full GSM8K results for the unchanged serving
+source remain the paired evaluation recorded above.
+
+Submission checks: shell syntax and Python compilation/AST checks, exact input
+hashes, negative cache/patch guards, source equality and all expected runtime
+artifacts passed. Ruff 0.15.1 lint/format ran with the existing pinned binary
+instead of downloading another copy for pre-commit. Applicable pre-commit
+checks include whitespace/EOF, AST, executable modes, private keys, isort and
+codespell; C++/notebook hooks have no applicable files. The launcher explicitly
+passes the test admin key to the client, preserving the verified value even if
+an unrelated shell admin-key environment variable is set.
