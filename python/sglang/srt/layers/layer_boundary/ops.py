@@ -33,6 +33,7 @@ from sglang.srt.layers.cp.utils import (
     cp_shard_hidden_states,
 )
 from sglang.srt.layers.dp_attention import (
+    _nvlink_dp_comm,
     attn_cp_reduce_scatter_tensor,
     attn_tp_all_gather_into_tensor,
     attn_tp_reduce_scatter_tensor,
@@ -308,10 +309,35 @@ def dp_reduce_scatterv(
     hidden_states: torch.Tensor,
     forward_batch: ForwardBatch,
 ) -> None:
+    sizes = get_dp_global_num_tokens()
+    # reduce_scatterv slices contiguous rank-major rows at prefix-sum offsets.
+    # Only equal, nonempty shards have the same offsets as the pull collective.
+    # In particular, divisibility of the total row count is not sufficient.
+    parallel = get_parallel()
+    actual_sizes = forward_batch.global_num_tokens_cpu
+    if (
+        sizes is not None
+        and len(sizes) == parallel.tp_size == parallel.attn_dp_size
+        and parallel.attn_cp_size == 1
+        and sizes[0] > 0
+        and all(size == sizes[0] for size in sizes)
+        and (actual_sizes is None or actual_sizes == sizes)
+        and hidden_states.shape[0] == sum(sizes)
+        and local_hidden_states.shape == (sizes[0], *hidden_states.shape[1:])
+    ):
+        # Keep the existing decode-role, TBO/stream, layout and capture gates.
+        # Call the communicator directly: dp_reduce_scatter_tensor may select
+        # the gatherv path again rather than reaching its pull branch.
+        comm = _nvlink_dp_comm()
+        if comm is not None and comm.can_reduce_scatter(
+            hidden_states, local_hidden_states
+        ):
+            comm.reduce_scatter(hidden_states, local_hidden_states)
+            return
     get_parallel().tp_group.reduce_scatterv(
         hidden_states,
         output=local_hidden_states,
-        sizes=get_dp_global_num_tokens(),
+        sizes=sizes,
     )
 
 

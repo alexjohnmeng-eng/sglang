@@ -321,7 +321,9 @@ async def lifespan(fast_api_app: FastAPI):
         server_args = await init_multi_tokenizer()
         # The launcher resolved it for its own process only.
         initialize_dsv41_sm90(model_config=_global_state.tokenizer_manager.model_config)
-        worker_id = _global_state.tokenizer_manager.worker_id
+        # HTTP workers now register by IPC address; there is no manager worker_id.
+        # The warmup callback uses this identifier only for log messages.
+        worker_id = os.getpid()
         warmup_thread_kwargs = _multi_tokenizer_warmup_kwargs(server_args, worker_id)
         thread_label = f"MultiTokenizer-{worker_id}"
 

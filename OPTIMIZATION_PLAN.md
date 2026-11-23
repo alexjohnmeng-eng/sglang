@@ -397,3 +397,41 @@ Script lint/format/syntax and applicable pre-commit checks also passed. The
 original four stale deferred-KV epilogue cases remain documented in the prior
 entry; this run does not claim those tests or fake-prefill decode were fixed.
 All paths above are relative to `/data1/fjmeng2/dsv41-runtime/`.
+
+
+## 2026-11-23: Equal-shard DP8/EP8 expert output over NVLink pull
+
+The DeepSeek-V4 MoE row transport bypassed the generic layer-boundary return and
+called variable-size reduce-scatter directly. With Humming and DP8/EP8 this became
+grouped NCCL Reduce, despite the input gather already using the pull plane.
+
+Route that return through the boundary operation. Equal positive rank-major
+shard sizes, exact full/local shapes and matching CPU token metadata may use the
+existing CustomAllReduceV2.reduce_scatter capability. Unequal/idle metadata and
+unsupported dtype/layout/capture/role/TBO states retain the existing fallback.
+No new communicator or tuning flag is introduced. The multi-tokenizer warmup
+label uses the process ID, matching the newer manager's IPC registration model.
+
+Matched H20x8, TP8/attention-DP8/EP8, Engram host per_rank, Humming0.1.12 with FP8
+input and FP8 target LM head, DSPARK block5, memory.85, graph32, workers8:
+
+- Decode-only + fake bootstrap,64x65536 input IDs,1024 output, simulated acceptance4.5,
+  warmup1+repeat3:7465.003/7412.191/7388.002 tok/s, median7412.191, versus the
+  matched startup-fixed base median6880.962 (+7.720%). Inputs and actual topology
+  match. No performance claim from the first unwired/no-gain attempt.
+- All8GPU-only profiles:22target verify rounds/rank. Output pull43calls/rank/round;
+  grouped NCCL Reduce absent. NCCL6.840->.103ms/rank/round; custom collectives
+  1.697->5.746ms including the new output pull. Kernel sums include waiting/overlap.
+- Eight-GPU component validation: BF16 width5120,shards1/8/16/32/48/64,eager and
+  four changed-input CUDA Graph replays with a lagging rank; bitwise equality to
+  rank-ordered FP32 accumulation then BF16, plus NCCL tolerance comparison and
+  uneven/idle fallback. Maximum observed absolute rounding delta from NCCL.125.
+- Boundary/FFN-exit regressions:38tests and11subtests passed.
+- Full real-prefill unified GSM8K:1281/1319=97.1190%, unchanged correct count,
+  zero request/scoring errors. EvalScope1.15.0,4shot,temp0,max2048,concurrency64,
+  simulation unset. Unified role=mix does NOT exercise decode-only pull; numerical
+  and replay coverage above is separate evidence for that path.
+
+Artifacts: /data1/fjmeng2/dsv41-runtime/repro/1123-dp8ep8-opt/ and
+1123-decode-reanalysis/matrix/local-ep8-{accuracy-}comm-pull-wired/.
+Future E48 tile experiments remain separate from this communication change.

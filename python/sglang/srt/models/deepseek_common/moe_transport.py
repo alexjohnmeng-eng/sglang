@@ -26,7 +26,10 @@ from sglang.srt.layers.dp_attention import (
     is_dp_gatherv_active,
     use_nvlink_dp_reduce_scatter,
 )
-from sglang.srt.layers.layer_boundary.ops import attn_cp_interleave_reduce_scatter
+from sglang.srt.layers.layer_boundary.ops import (
+    attn_cp_interleave_reduce_scatter,
+    dp_reduce_scatterv,
+)
 from sglang.srt.layers.layer_boundary.output import DeferredFinalize
 from sglang.srt.layers.layer_boundary.row_transport import ComputeTransport
 from sglang.srt.layers.moe import (
@@ -268,11 +271,7 @@ class MoeRowTransport(ComputeTransport):
                 hidden_states,
             )
             if should_use_dp_reduce_scatterv() or _use_reduce_scatterv:
-                get_parallel().tp_group.reduce_scatterv(
-                    global_hidden_states,
-                    output=hidden_states,
-                    sizes=get_dp_global_num_tokens(),
-                )
+                dp_reduce_scatterv(hidden_states, global_hidden_states, forward_batch)
             elif _use_reduce_scatter:
                 dp_reduce_scatter_tensor(hidden_states, global_hidden_states)
             else:
