@@ -65,11 +65,8 @@ from sglang.srt.layers.logprob_processor import (
 )
 from sglang.srt.layers.vocab_parallel_embedding import VocabParallelEmbedding
 from sglang.srt.managers.auxiliary_output import DeviceAuxiliaryOutput
-from sglang.srt.model_executor.forward_batch_info import (
-    CaptureHiddenMode,
-    ForwardBatch,
-    ForwardMode,
-)
+from sglang.srt.model_executor.forward_batch_info import ForwardBatch
+from sglang.srt.model_executor.forward_mode import CaptureHiddenMode, ForwardMode
 from sglang.srt.runtime_context import (
     LoRABatchLayout,
     get_exec,
@@ -77,6 +74,7 @@ from sglang.srt.runtime_context import (
     get_parallel,
 )
 from sglang.srt.utils.common import (
+    async_d2h,
     is_cpu,
     is_npu,
     is_pin_memory_available,
@@ -329,6 +327,23 @@ class LogitsProcessorOutput:
 
     # Scheduler-local output copied alongside the ordinary generation result.
     auxiliary_device_output: Optional[DeviceAuxiliaryOutput] = None
+
+    def own_customized_info(self) -> None:
+        """Detach typed customized-info rows from persistent CUDA buffers."""
+        if not self.customized_info:
+            return
+        owned = dict(self.customized_info)
+        ready = None
+        for key, value in owned.items():
+            if isinstance(value, _TypedCustomizedInfo):
+                rows = value.rows
+                if isinstance(rows, torch.Tensor) and rows.device.type != "cpu":
+                    if ready is None:
+                        ready = torch.get_device_module(rows.device).Event()
+                    owned[key] = type(value)(async_d2h(rows), ready)
+        if ready is not None:
+            ready.record()
+        self.customized_info = owned
 
     def finalize_input_logprobs(self) -> None:
         if self.input_logprobs_copy_done is None:

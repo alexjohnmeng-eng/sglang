@@ -56,9 +56,16 @@ class DFlashVerifyInput(SpecInput):
     # part of it this verify writes (`IterationIds.write_ids`).
     iteration_ids: Optional[IterationIds] = None
     iteration_cols: Optional[Cols] = None
+    # Ant DSpark names the same plan ``kv_loc_plan``/``kv_loc_cols``.
+    kv_loc_plan: Optional[IterationIds] = None
+    kv_loc_cols: Optional[Cols] = None
 
     def __post_init__(self):
         super().__init__(spec_input_type=SpecInputType.DFLASH_VERIFY)
+        if self.iteration_ids is None and self.kv_loc_plan is not None:
+            self.iteration_ids = self.kv_loc_plan
+        if self.iteration_cols is None and self.kv_loc_cols is not None:
+            self.iteration_cols = self.kv_loc_cols
         if self.num_tokens_per_req == -1:
             self.num_tokens_per_req = int(self.draft_token_num)
         self.num_tokens_for_logprob_per_req = int(self.draft_token_num)

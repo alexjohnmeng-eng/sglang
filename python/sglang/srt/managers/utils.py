@@ -172,6 +172,12 @@ class GenerationBatchResult:
     # V2 verify ForwardBatch whose tensors must outlive mid-iter SB rebinds).
     extra_keep_alive_refs: Optional[List[Any]] = None
 
+    # Owner of graph-persistent token/accept buffers used by folded DSpark.
+    # Kept alive until the result copy has completed.
+    persistent_result_copy_owner: Optional[Any] = dataclasses.field(
+        default=None, repr=False, compare=False
+    )
+
     # Routed experts: pending async D2H for overlap scheduling
     routed_experts_output: Optional[TopkCaptureOutput] = None
     indexer_topk_output: Optional[TopkCaptureOutput] = None

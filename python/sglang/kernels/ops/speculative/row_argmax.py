@@ -116,3 +116,9 @@ def _medium_row_argmax(x, divisor=None, divisor_min=None, ignore_nan=False):
         values, indices, out, splits, triton.next_power_of_2(splits), num_warps=1
     )
     return out
+
+
+def row_argmax(x: torch.Tensor) -> torch.Tensor:
+    """Row-wise argmax for FP32 speculative logits."""
+    assert x.dim() == 2 and x.dtype == torch.float32 and x.stride(1) == 1
+    return _medium_row_argmax(x)

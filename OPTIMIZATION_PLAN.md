@@ -325,3 +325,43 @@ checks include whitespace/EOF, AST, executable modes, private keys, isort and
 codespell; C++/notebook hooks have no applicable files. The launcher explicitly
 passes the test admin key to the client, preserving the verified value even if
 an unrelated shell admin-key environment variable is set.
+
+
+## 2026-11-23: Commit the runtime compatibility fixes directly
+
+The user requested normal source commits instead of a runtime patch. The
+required compatibility code is now being committed in its source files. Eleven
+files retain the tested Humming metadata, CP tail/shared-read, DSPARK plan/API,
+output ownership, row-argmax and fake-transfer adapters. The temporary
+SGLANG_DSPARK_DRAFT_DECODE_GRAPH switch is removed; its previously enabled
+default execution path is preserved. An unused DSV4Metadata import is removed
+and two files are formatted; neither changes execution.
+Required import lint cleanup also imports existing symbols from their defining
+modules and removes duplicate model imports, without replacing implementations.
+
+Validation before the source commit:
+
+- The eleven adapters matched the previously benchmarked source byte for byte
+  before formatting/import cleanup. Default graph behavior is unchanged.
+- RunnerIds, customized output streaming, deferred-KV commit, and DSPARK draft
+  path tests: **71 passed, 33 subtests passed**. Log:
+  `repro/1123-compat-selected-tests.log`.
+- A broader first run had 73 passing tests plus four failures in existing
+  deferred-KV epilogue cases using an unsupported `deferred_draft_kv` constructor
+  argument. Both that test file and the DsparkVerifyEpilogue source are identical
+  to pre-change HEAD. This pre-existing suite/API mismatch is retained in
+  `repro/1123-compat-tests.log`; it is not reported as a passing suite.
+- CUDA row_argmax agrees with torch for [1,64] x [4096,129280] shapes, in eager
+  mode and three CUDA graph replays with new inputs per shape. Owned typed
+  customized-info D2H rows survive overwriting the original persistent GPU
+  buffer. Log: `repro/1123-compat-cuda.log`.
+- Ruff 0.15.1 lint and formatting checks passed for all eleven source files.
+- Applicable pre-commit checks passed, including indirect-import and runtime
+  import-boundary checks. The selected tests and CUDA probes passed again after
+  the required import cleanup.
+
+Paths above are relative to `/data1/fjmeng2/dsv41-runtime/`. This is a source
+compatibility commit, not a claim of another throughput improvement. The
+reproduction launcher will export a committed revision directly and drop
+compatibility.patch and patch-specific manifest logic. Clean-source full
+prefill/profile validation is recorded in the follow-up entry.

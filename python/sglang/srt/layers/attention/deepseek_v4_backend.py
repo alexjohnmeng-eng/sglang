@@ -122,12 +122,11 @@ from sglang.srt.layers.dsv41_sm90 import dsv41_sm90_on
 from sglang.srt.mem_cache.deepseek_v4_compress_state import KVAndScore
 from sglang.srt.mem_cache.deepseek_v4_memory_pool import DeepSeekV4TokenToKVPool
 from sglang.srt.model_executor.forward_batch_info import (
-    CaptureHiddenMode,
     ForwardBatch,
-    ForwardMode,
     get_server_return_hidden_states_mode,
 )
 from sglang.srt.model_executor.forward_context import get_attn_backend
+from sglang.srt.model_executor.forward_mode import CaptureHiddenMode, ForwardMode
 from sglang.srt.model_executor.runner_backend_utils.breakable_cuda_graph.breakable_cuda_graph import (
     _current_capture_var,
     eager_on_graph,
@@ -156,7 +155,8 @@ from sglang.srt.utils import ceil_align, is_cuda, is_xpu
 from sglang.srt.utils.common import async_h2d, is_pin_memory_available
 
 if TYPE_CHECKING:
-    from sglang.kernels.ops.attention.flash_mla_interface import FlashMLASchedMeta
+    from flash_mla.flash_mla_interface import FlashMLASchedMeta
+
     from sglang.srt.layers.radix_attention import RadixAttention
     from sglang.srt.managers.schedule_batch import ScheduleBatch
     from sglang.srt.model_executor.model_runner import ModelRunner
@@ -968,6 +968,8 @@ class LateLayerTail(msgspec.Struct, frozen=True):
     pad_rows: int = 0
     cp_metadata: Optional[InterleaveContextParallelMetadata] = None
     local_lens_cpu: Optional[List[int]] = None
+    # Original extend rows in global request order; token_indices is rank-local under CP.
+    global_token_indices: Optional[torch.Tensor] = None
     req_global: Optional[torch.Tensor] = None
     pos_global: Optional[torch.Tensor] = None
     # Prefill CUDA graph: token_indices/positions are persistent buffers of a fixed
@@ -2148,6 +2150,7 @@ class DeepseekV4AttnBackend(
                 pad_rows=cp_tail["pad_rows"],
                 cp_metadata=cp_tail["cp_metadata"],
                 local_lens_cpu=cp_tail["local_lens_cpu"],
+                global_token_indices=token_indices,
                 req_global=metadata.low_ratio_req_indices,
                 pos_global=metadata.low_ratio_pos_i64,
             )
@@ -2218,6 +2221,7 @@ class DeepseekV4AttnBackend(
                 pad_rows=cp_tail["pad_rows"],
                 cp_metadata=cp_tail["cp_metadata"],
                 local_lens_cpu=cp_tail["local_lens_cpu"],
+                global_token_indices=token_indices,
                 skip_layers=True,
             )
         )
@@ -2488,10 +2492,12 @@ class DeepseekV4AttnBackend(
     ) -> DSV4Metadata:
         if seq_lens_cpu is not None:
             seq_lens_cpu_list = [int(x) for x in seq_lens_cpu.tolist()]
-        elif self.sm90_decode:
-            # On CUDA the block prep reads only the device lengths (the host ones feed
-            # the torch expand fallback): no copy that waits on the last verify. The
-            # metadata glue that avoids it otherwise is off under prefill CP.
+        elif _is_cuda:
+            # CUDA graph replay owns device-side sequence lengths.  Reading them
+            # with ``tolist`` would synchronize/copy during capture and can surface
+            # as an illegal address after the preceding draft graph.  The uniform
+            # block planner supports device-only lengths and only needs host lengths
+            # for the non-CUDA expand fallback.
             seq_lens_cpu_list = None
         else:
             seq_lens_cpu_list = seq_lens.tolist()
@@ -3213,7 +3219,10 @@ class DeepseekV4AttnBackend(
         )
 
     def _snapshot_prefill_shared_reads(
-        self, forward_batch: ForwardBatch, *, num_qo_tokens: int
+        self,
+        forward_batch: ForwardBatch,
+        *,
+        num_qo_tokens: Optional[int] = None,
     ) -> SharedReadEnds:
         # Sparse prefill otherwise reads req_to_token/full_to_swa lazily in its
         # first layer. CP shards the query layout that this global snapshot
@@ -3227,6 +3236,10 @@ class DeepseekV4AttnBackend(
 
         metadata = self.forward_metadata
         assert isinstance(metadata, DSV4Metadata)
+        if num_qo_tokens is None:
+            # Older runner APIs did not pass the query-token count to this hook.
+            # The extend positions cover the same rows for the eager path.
+            num_qo_tokens = int(forward_batch.positions.shape[0])
         if self._use_sparse_prefill(forward_batch, num_qo_tokens=num_qo_tokens):
             metadata.sparse_prefill_cache = self._build_sparse_prefill_chunk_cache(
                 forward_batch, metadata.core_attn_metadata, num_qo_tokens=num_qo_tokens

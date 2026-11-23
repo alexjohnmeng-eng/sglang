@@ -1016,6 +1016,9 @@ class ModelRunner:
             device=self.device,
             is_draft_worker=self.is_draft_worker,
         )
+        # Compatibility alias for the DSpark KV-plan API used by the Ant
+        # migration. RunnerIds provides the same plan/bind/read operations.
+        self.kv_index_translator = self.runner_ids
 
     def max_shared_logits_buffer_rows(self) -> int:
         """Maximum rows in the persistent logits buffer used by graph runners.

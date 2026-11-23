@@ -168,7 +168,7 @@ def humming_quant_input_rows(
         meta is None
         or meta.a_dtype != dtypes.float8e4m3
         or meta.as_dtype != dtypes.float32
-        or meta.mma_type == MmaType.MXMMA
+        or getattr(meta, "mma_type", None) == MmaType.MXMMA
         or x.dtype not in (torch.bfloat16, torch.float16)
     ):
         return None

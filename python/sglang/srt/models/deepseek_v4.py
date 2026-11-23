@@ -67,7 +67,6 @@ from sglang.srt.hardware_backend.npu.utils import (
     use_npu_arch35_mxfp8_wo_a,
 )
 from sglang.srt.hf_transformers import get_rope_config
-from sglang.srt.layers.attention.deepseek_v4_backend import DSV4Metadata
 from sglang.srt.layers.attention.dsa.utils import (
     is_dsa_enable_prefill_cp,
 )
@@ -193,7 +192,6 @@ from sglang.srt.models import deepseek_v4_head_a2a as head_a2a
 from sglang.srt.models import deepseek_v4_mhc as mhc
 from sglang.srt.models import deepseek_v4_prefill_graph as prefill_graph
 from sglang.srt.models import deepseek_v4_tp_sp as tp_sp
-from sglang.srt.models.dbrx import ReplicatedLinear
 from sglang.srt.models.deepseek_common.amd.deepseek_v4_fused_mhc import (
     is_cross_layer_mhc_fusion_enabled,
 )
@@ -214,16 +212,6 @@ from sglang.srt.models.deepseek_common.utils import (
     _use_aiter_bpreshuffle_gfx95,
     is_wint4afp8_or_wint4a16_config,
     quant_blocks_shared_experts_fusion,
-)
-from sglang.srt.layers.dsv41_sm90 import dsv41_sm90_on
-from sglang.srt.models.deepseek_v4_cp_prefill import (
-    CpMoeSymmTransport,
-    bind_cp_moe_symm_transport,
-    cp_local_router_supported,
-    cp_moe_symm_supported,
-    cp_shard_input_embeds,
-    start_cp_compressor_gather,
-    start_cp_kv_gather,
 )
 from sglang.srt.models.deepseek_v4_cp_prefill import (
     CpMoeSymmTransport,
@@ -2901,19 +2889,6 @@ class MQALayer(MqaAttentionBase):
                 attn_backend,
                 (DeepseekV4AttnBackend, DeepseekV4HipRadixBackend),
             )
-        metadata = attn_backend.forward_metadata
-        if (
-            isinstance(metadata, DSV4Metadata)
-            and metadata.real_num_tokens is not None
-            and x.shape[0] > metadata.real_num_tokens
-        ):
-            return self._forward_real_rows(
-                x,
-                positions,
-                forward_batch,
-                real_num_tokens=metadata.real_num_tokens,
-                defer_all_reduce=defer_all_reduce,
-            )
         cp_capture = prefill_graph.is_capturing()
 
         enable_multi_stream = (
@@ -4794,9 +4769,7 @@ class DeepseekV4Model(nn.Module):
                 if hoisted_engram_kv is not None:
                     _, kv, kv_ready = hoisted_engram_kv.pop(i)
                     torch.cuda.current_stream().wait_event(kv_ready)
-                    hidden_states = engram.gate(
-                        state.residual, kv, input_ids=input_ids
-                    )
+                    hidden_states = engram.gate(state.residual, kv, input_ids=input_ids)
                     del kv
                 else:
                     hidden_states = engram(
@@ -5553,13 +5526,13 @@ class DeepseekV4ForCausalLM(
     ):
         """Patchify raw images into one ViT-ready item per image for the encoder."""
         # Encoder-only packages; keep them off the model import path.
-        from sglang.srt.disaggregation.encoder.preprocessor import (
-            EncoderPreprocessOutput,
-        )
         from sglang.srt.multimodal.deepseek_v41_image_processing import (
             GPU_PLAN_KEY,
             patchify_image,
             prepare_image_gpu,
+        )
+        from sglang.srt.multimodal.encoder_preprocessing import (
+            EncoderPreprocessOutput,
         )
 
         if modality != Modality.IMAGE or self.vision is None:

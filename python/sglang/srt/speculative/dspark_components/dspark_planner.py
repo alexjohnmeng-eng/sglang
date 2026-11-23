@@ -64,7 +64,7 @@ class VerifyWindow(msgspec.Struct, frozen=True):
     verify_cache_loc_2d: torch.Tensor
     # The iteration's plan of `verify_cache_loc`: the draft block, the verify
     # and the target-hidden KV writes all take their ids from it.
-    iteration_ids: IterationIds
+    kv_loc_plan: IterationIds
 
 
 class VerifyTierResolution(msgspec.Struct, frozen=True):
@@ -914,7 +914,7 @@ def alloc_verify_window(
         positions_2d=positions_2d,
         verify_cache_loc=verify_cache_loc,
         verify_cache_loc_2d=verify_cache_loc.view(bs, verify_w),
-        iteration_ids=plan,
+        kv_loc_plan=plan,
     )
 
 
