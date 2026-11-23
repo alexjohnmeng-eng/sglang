@@ -223,3 +223,12 @@ register_kernel(
         capabilities=frozenset({CapabilityRequirement.cuda(min_sm=(8, 9))}),
     )
 )
+
+register_kernel(
+    KernelSpec(
+        op="activation.vision_swiglu",
+        backend=KernelBackend.TRITON,
+        target="sglang.kernels.ops.activation.vision_swiglu:vision_swiglu",
+        capabilities=CUDA_ONLY,
+    )
+)

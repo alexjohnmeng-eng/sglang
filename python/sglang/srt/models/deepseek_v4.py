@@ -38,6 +38,7 @@ from sglang.kernels.ops.attention.dsv4.wo_a import (
     fused_rope_wo_a_bf16,
 )
 from sglang.kernels.ops.attention.flash_mla_sm120 import SM120_DECODE_MAX_TOKENS
+from sglang.kernels.ops.embeddings.vision_span import pack_vision_span
 from sglang.kernels.ops.gemm.dsv4_wo_a import (
     wo_a_bf16_gemv,
     wo_a_bf16_small_batch,
@@ -5603,7 +5604,20 @@ class DeepseekV4ForCausalLM(
             )
             features = self.aligner(self.vision(patches, h, w), h, w)
             r = self.config.vision_downsample_ratio
-            types = image_token_types((h + r - 1) // r, (w + r - 1) // r).to(device)
+            n_llm_h, n_llm_w = (h + r - 1) // r, (w + r - 1) // r
+            if getattr(self.vision, "fused", False):
+                spans.append(
+                    pack_vision_span(
+                        features.to(dtype),
+                        self.image_start,
+                        self.image_newline,
+                        self.image_end,
+                        n_llm_h,
+                        n_llm_w,
+                    )
+                )
+                continue
+            types = image_token_types(n_llm_h, n_llm_w).to(device)
             span = torch.empty(
                 (len(types), self.config.hidden_size), device=device, dtype=dtype
             )
@@ -5613,6 +5627,21 @@ class DeepseekV4ForCausalLM(
             span[types == 3] = self.image_end
             spans.append(span)
         return spans
+
+    @torch.no_grad()
+    def _prewarm_vision_kernels(self) -> None:
+        """Compile the fused ViT and span kernels before the first image arrives."""
+        self.vision.prewarm_fused_kernels()
+        # The span kernel specializes on the hidden size and dtype only.
+        features = torch.zeros(
+            (4, self.config.hidden_size),
+            device=self.image_start.device,
+            dtype=self.image_start.dtype,
+        )
+        pack_vision_span(
+            features, self.image_start, self.image_newline, self.image_end, 2, 2
+        )
+        torch.cuda.synchronize(self.image_start.device)
 
     def _prepare_mm_embeddings(self, input_ids, forward_batch):
         # Keep scheduler hash IDs intact: the shared embedder clamps its input in place.
@@ -6176,6 +6205,8 @@ class DeepseekV4ForCausalLM(
                 weight_loader = getattr(param, "weight_loader", default_weight_loader)
                 weight_loader(param, weight)
                 loaded_params.add(name)
+            if getattr(self.vision, "fused", False):
+                self._prewarm_vision_kernels()
             return loaded_params
 
         if is_nextn:

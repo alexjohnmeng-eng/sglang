@@ -87,3 +87,12 @@ register_kernel(
         capabilities=CUDA_ONLY,
     )
 )
+
+register_kernel(
+    KernelSpec(
+        op="embeddings.pack_vision_span",
+        backend=KernelBackend.TRITON,
+        target="sglang.kernels.ops.embeddings.vision_span:pack_vision_span",
+        capabilities=CUDA_ONLY,
+    )
+)

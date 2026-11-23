@@ -44,6 +44,7 @@ from sglang.srt.layers.dp_attention import (
     init_dp_gathered_buffer,
     initialize_dp_attention_flags,
 )
+from sglang.srt.layers.dsv41_sm90 import initialize_dsv41_sm90
 from sglang.srt.managers.io_struct import (
     ProfileReq,
     ProfileReqType,
@@ -635,6 +636,8 @@ class MMEncoder:
         initialize_model_parallel()
         initialize_dp_attention_flags(server_args)
         init_dp_gathered_buffer(self.model_config)
+        # Encoder workers have no scheduler to initialize the SM90 role flags.
+        initialize_dsv41_sm90(model_config=self.model_config)
 
         self.model = load_model(
             model_config=self.model_config,
