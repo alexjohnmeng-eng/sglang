@@ -134,8 +134,8 @@ from sglang.srt.hf_transformers import (
 from sglang.srt.layers.cp.base import get_cp_strategy, is_cp_sharded_padded
 from sglang.srt.layers.cp.utils import from_cp_sharded
 from sglang.srt.layers.dp_attention import get_dp_tp_group, require_mlp_sync
-from sglang.srt.layers.layernorm_sp import is_muse_spark_architecture
 from sglang.srt.layers.dsv41_sm90 import dsv41_sm90_on
+from sglang.srt.layers.layernorm_sp import is_muse_spark_architecture
 from sglang.srt.layers.moe import initialize_moe_config
 from sglang.srt.layers.quantization.fp4_utils import initialize_fp4_gemm_config
 from sglang.srt.layers.quantization.fp8_utils import initialize_fp8_gemm_config
@@ -2713,6 +2713,7 @@ class Scheduler(
         self.resolve_forward_inputs = self.uocr_runtime.resolve_forward_inputs
 
     def init_request_receiver(self) -> None:
+        self.num_received_reqs = 0
         receiver_factory = SchedulerRequestReceiver
         if self.uocr_runtime is not None:
             receiver_factory = partial(
@@ -2735,7 +2736,13 @@ class Scheduler(
             rust_server_mode=envs.SGLANG_RUST_SERVER.get(),
             scripted_scheduler_hook=self.scripted_scheduler_hook,
             scheduler_stage_metrics=self.scheduler_stage_metrics,
+            count_received_reqs=(
+                self._count_received_reqs if dsv41_sm90_on("runtime") else None
+            ),
         )
+
+    def _count_received_reqs(self, num_reqs: int) -> None:
+        self.num_received_reqs += num_reqs
 
     def init_dp_attn_adapter(self) -> None:
         # Spec workers have no .model_runner of their own; the prefill graph
@@ -2925,6 +2932,7 @@ class Scheduler(
             ),
             get_total_prefill_busy_us=lambda: self.total_prefill_busy_us,
             get_decode_moment_totals=lambda: self.decode_moment_totals,
+            get_num_received_reqs=lambda: self.num_received_reqs,
             get_waiting_storage_span=self.tree_cache.waiting_storage_span,
         )
 

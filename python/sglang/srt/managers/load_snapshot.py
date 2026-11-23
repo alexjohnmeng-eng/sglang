@@ -219,6 +219,8 @@ class LoadSnapshot(msgspec.Struct, omit_defaults=True):
     num_prealloc_ready_tokens: int = 0
     max_total_num_tokens: int = 0
     max_running_requests: int = 0
+    # Cumulative arrivals used to retire the DP controller's in-flight sends.
+    num_received_reqs: int = 0
     token_usage: float = 0.0
     gen_throughput: float = 0.0
     cache_hit_rate: float = 0.0
@@ -268,9 +270,14 @@ class LoadSnapshot(msgspec.Struct, omit_defaults=True):
         return load
 
 
+# Internal controller accounting is not part of /v1/loads.
+_CONTROLLER_FIELDS = frozenset({"num_received_reqs"})
+
 # Flat scalar fields returned under "core": every struct field but the sections.
 _CORE_KEYS = tuple(
-    f for f in LoadSnapshot.__struct_fields__ if f not in _SECTION_FIELDS
+    f
+    for f in LoadSnapshot.__struct_fields__
+    if f not in _SECTION_FIELDS | _CONTROLLER_FIELDS
 )
 
 

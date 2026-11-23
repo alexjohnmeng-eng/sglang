@@ -496,3 +496,145 @@ Artifacts under /data1/fjmeng2/dsv41-runtime/repro/:
 Next: compare paired GSM8K answers and truncations before claiming accuracy
 alignment, then use matched all-rank kernel timelines to investigate residual
 EP8/EP4 differences and EP4's skewed scheduling cost.
+
+
+## 2026-11-24: Ant in-flight dispatch and encoder fusion
+
+Selective ports from Ant d7f29b97ac (DP dispatch) and 6e6d5d9e13 (ViT fusion
+and request-sharing receiver synchronization), based on 366f3fc888. These
+changes retain the current normalized axes: dp_size=1, attn_dp_size=8.
+
+The controller retains sent requests until a scheduler snapshot acknowledges
+their receipt, including explicitly routed and health requests. Snapshot
+refreshes therefore cannot erase in-flight sends. Request count precedes token
+count and capped ranks are skipped. This policy is restricted to V4.1 SM90
+role=decode, snapshot-based balancing and non-elastic DP. The received counter
+is internal and is excluded from the public loads core fields.
+
+Matched H20x8, TP8, attention-DP8, EP8/EP4, Engram host per_rank,
+Humming 0.1.12/bm32, FP8 inputs and target LM head, DSPARK block 5, memory .85,
+max requests 256, graph max batch 32, tokenizer workers 8. Decode performance uses
+fake prefill, exactly 65536 input IDs, 1024 output tokens, acceptance 4.5 and zero
+cached tokens. The 64-request cases use one warmup and three repetitions; 96/128 bursts repeat five times.
+All eight ranks have GPU-only captures; stack mapping is separate.
+
+| EP | Scheduling | Base tok/s | Candidate tok/s | Change |
+| --- | --- | ---: | ---: | ---: |
+| 8 | balanced | 10001.282 | 9955.477 | -0.458% |
+| 8 | skewed | 8820.530 | 8623.535 | -2.233% |
+| 8 | natural | 9951.724 | 9953.877 | +0.022% |
+| 8 | burst96 | 11740.993 | 11657.938 | -0.707% |
+| 8 | burst 128 | 10731.519 | 10634.534 | -0.904% |
+| 4 | balanced | 10500.970 | 10489.721 | -0.107% |
+| 4 | skewed | 7732.569 | 7780.839 | +0.624% |
+| 4 | natural | 10602.764 | 10531.157 | -0.675% |
+| 4 | burst96 | 10711.877 | 10718.178 | +0.059% |
+| 4 | burst 128 | 10496.797 | 11294.316 | +7.598% |
+
+The measured dispatch benefit is EP4 burst 128 (+7.60%), not a general 64-request
+throughput improvement. Candidate 128 has 16 requests/rank in all five samples;
+three control samples have a rank with 17 requests. The actual captured graph
+grid includes 18, so source plus all-active timing distributions derive an 18
+versus 16 graph bucket. Both 128 GPU captures happened to be balanced 16: their
+kernel timings cannot be presented as a direct18-to16 profile comparison.
+Balanced 64 kernel families remain essentially unchanged.
+
+Existing forced-skew 64 GPU captures show the cost of 9 requests on one rank:
+EP4 W13/W2 rise from 5.797/3.510 to 10.654/5.587 ms/rank/verify; EP8's tuned
+configuration rises from 5.794/3.265 to 6.653/3.694. The 96-request EP4 capture
+uses a predominant M48 target tile (W13 278.92 us), versus EP8 M32 (176.04 us).
+EP4 communication is lower but its GEMM time is higher. EP dimensions and
+expert sharding also differ, so an E96 M32-versusM48 tuning A/B is still needed
+to establish a tile-specific improvement. Overlapping kernel sums are not
+additive wall time; graph-only call sites remain unresolved where stacks do
+not identify the capture site.
+
+### Encoder and EPD behavior
+
+Encoder-only SM90 vision fuses SwiGLU, half-split Q/K RoPE and image span
+packing, passes token-strided V to FA3 and retains a bounded device metadata
+LRU. Eager FP32 operation order and intermediate dtype rounding are preserved.
+Other roles retain the existing vision path; the list-of-spans transport
+contract is preserved. GPU image preprocessing remains enabled.
+
+Attention-DP EPD previously deadlocked: unrelated DP request queues entered
+whole-TP receiver collectives, and one request waited for endpoint registration
+from all TP ranks. WaitingListSync instead uses the request-sharing
+attention-TP x attention-CP groups (whole TP without attention DP), including
+receive counts, startup/error agreement and status reduction. The original
+failed control is retained; both successful MMMU variants include this same
+required synchronization fix.
+
+Final formatted worktree, actual checkpoint, same weights/GPU, seed 42 patches,
+four grids, five interleaved timing pairs x ten calls after warmup. All four
+encoder outputs are bitwise equal. This measures get_image_feature with warm repeated grids;
+it excludes CPU image decoding and transport. Speedup is throughput increase.
+
+| ViT grid | Eager ms | Fused ms | Throughput change |
+| --- | ---: | ---: | ---: |
+| 16 x 16 | 20.842 | 19.333 | +7.81% |
+| 17 x 29 | 20.091 | 18.881 | +6.41% |
+| 32 x 32 | 20.026 | 18.879 | +6.07% |
+| 48 x 64 | 45.062 | 36.733 | +22.68% |
+
+MMMU validation 900 only: EvalScope 1.15.0, 0-shot, temperature 1, max_tokens 65536,
+reasoning_effort=max,concurrency 64; encoder TP1 plus unified LM TP8/attention-DP8/
+EP4, ZMQ transfer, GPU image preprocessing. Control and fused candidate both
+score 780/900=86.6667%, zero request/scoring errors; max-token stops 2/3.
+Input/target hash matches:
+da2835f204153c44d2f3c4341d0051b683bcae1da18577dfcd1f33425c8aa40d.
+Equal totals do not imply identical answers or statistical accuracy equivalence.
+
+GSM8K full 1319: EvalScope 1.15.0, 4-shot, temperature 0, max_tokens 2048,concurrency 64,
+real prefill/unified non-PD, simulation unset. Fresh base 366 scores 1281/1319
+on both EPs. Candidate combined 08 scores EP8 1284/1319=97.3465% and EP4
+1281/1319=97.1190%, zero request/scoring errors, one max-token stop each.
+Input/target hash matches e9efb5d8af90f84007f96fd433a1b1cf1cb0ce0236f81463ed76ad67ecfa9115.
+EP8 has 2 correct-to-wrong and 5 wrong-to-correct answers; EP4 has 4 each.
+MMMU has 26 correct-to-wrong and 26 wrong-to-correct answers. Equal MMMU/EP4
+totals therefore do not mean identical predictions. Neither the paired
+non-significance tests nor these serving runs establish accuracy equivalence
+or a causal accuracy improvement.
+Non-PD role=mix does not activate the decode dispatch policy; routing unit
+checks and actual decode endpoints supply that coverage. MMMU source 07 and
+combined 08 share the same vision/receiver math; their difference is DP serving
+accounting, whose dispatch policy is off in the MMMU deployment.
+
+DP CPU tests: 77 passed plus 40 subtests. Encoder/processor/receiver CPU tests:
+45 passed, 2 skipped plus 2 subtests. Vision GPU tests: 10 passed plus 45 subtests.
+Required Ruff/import-boundary checks pass. Repository-wide test registration
+still fails for the unmodified test_topk_v2.py AMD suite
+jit-kernel-unit-test-amd; the same failure reproduces on clean base 366.
+Final formatted worktree routing/receiver regression: 47 passed plus 19 subtests.
+Final checkpoint repeat remains bitwise equal on all four grids (table above);
+the earlier snapshot A/B measured throughput changes 2.76% to 23.12%.
+Separate GPU-only captures reduce 1540 to 848 kernels/image on every grid.
+For 48x64, kernel sum42.645->35.667 ms/image; unprofiled wall45.062->36.733 ms.
+The GPU spans include host launch gaps and are not used as unprofiled latency.
+All 20 watched Python file hashes match the final worktree, with no mutation
+during the checkpoint/profile run. Serving accuracy used immutable snapshots;
+final import-format changes preserve their computational AST.
+
+### Next experiments
+
+- Tune E96 target 2880/3456 route-slot cases jointly for W13/W2, comparing
+  legal M32/M48 tiles and N/K tiles, stages, CTAs and grid. For E48, investigate
+  larger 4032/4608/5184 route-slot cases and M32 versus M64 plus ntail. Use real
+  route distributions and padding, retain FP8 input/FP32 accumulation, keep
+  stream-K off, and preserve the tuning key's current global layout. Do not
+  divide the estimator by EP without accounting for actual valid/invalid IDs.
+- Check both supported EP configurations with numerical and graph-replay
+  operator checks, matched fake-prefill timings/profiles and full GSM8K before
+  another performance commit. The current 64-request target has no new gain
+  from dispatch accounting.
+- Ant preprocess/forward overlap and request/global image caching need separate
+  cold/repeated-image tests, multiworker/failure/lease coverage and MMMU.
+  Remaining admission bounds, SWA/HiCache and PD quarantine/metadata reset are
+  separate ports. Cache reuse is not a strict radix-disabled 64K/256K prefill win.
+
+Artifacts and exact commands:
+/data1/fjmeng2/dsv41-runtime/repro/ant-runtime-vit-20261123-222753/README.md,
+selection.json, dispatch_comparison.json, dispatch_profile_review.json,
+{mmmu,gsm8k_ep8,gsm8k_ep4}_paired.json,encoder-profile/ and
+mmmu-{base-sync-full,vit-sync-full}/. Decode/GSM8K runs are under
+1123-decode-reanalysis/matrix/local-ep{8,4}-*ant-runtime-vit-20261123-222753*.
