@@ -59,8 +59,8 @@ __global__ __launch_bounds__(kSegmentA2AMaxThreads, 1) void segment_a2a_push_ker
   constexpr uint32_t kTileVecs = kWarpThreads * kUnroll;
 
   PDLWaitPrimary<kUsePDL>();
-  const auto barrier = distributed::Barrier<kWorldSize>{params.semaphores.data(), params.rank, /*num_arrives=*/2};
-  barrier.arrive_relaxed(/*n=*/0);
+  const auto barrier = distributed::Barrier<kWorldSize>{params.semaphores.data(), params.rank};
+  barrier.arrive_relaxed();
   __syncthreads();
 
   const auto lane = threadIdx.x % kWarpThreads;
@@ -98,7 +98,7 @@ __global__ __launch_bounds__(kSegmentA2AMaxThreads, 1) void segment_a2a_push_ker
   }
 
   __syncthreads();
-  barrier.arrive_rel_acq(/*n=*/1);
+  barrier.arrive_rel_acq();
 }
 
 template <uint32_t kWorldSize, uint32_t kUnroll, bool kUsePDL>
@@ -133,8 +133,7 @@ struct SegmentA2A {
     }
     CHECK_HOST(reinterpret_cast<uintptr_t>(src_ptr) % 16 == 0);
     CHECK_HOST(seg_bytes > 0 && rows > 0 && 0 <= valid_rows && valid_rows <= rows * kWorldSize);
-    CHECK_HOST(1 <= num_blocks && num_blocks <= pull.num_blocks)
-        << num_blocks << " blocks, plane has " << pull.num_blocks;
+    CHECK_HOST(1 <= num_blocks && num_blocks <= pull.capacity) << num_blocks << " blocks, plane has " << pull.capacity;
     CHECK_HOST(
         kWorldSize <= num_threads && num_threads <= kSegmentA2AMaxThreads && num_threads % device::kWarpThreads == 0);
     const auto dst_end = dst_offset + (kWorldSize - 1) * dst_rank_stride + (rows - 1) * dst_row_stride + seg_bytes;

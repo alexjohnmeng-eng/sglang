@@ -419,9 +419,8 @@ ALL_REDUCE_KERNEL void reduce_scatter_pull_kernel(const __grid_constant__ AllRed
   const auto barrier = distributed::Barrier<kWorldSize>{
       params.ws.semaphores.data(),
       params.rank,
-      /*num_arrives=*/2,
   };
-  barrier.arrive_relaxed(/*n=*/0);
+  barrier.arrive_relaxed();
   __syncthreads();
 
   const auto num_threads = blockDim.x * gridDim.x;
@@ -436,7 +435,7 @@ ALL_REDUCE_KERNEL void reduce_scatter_pull_kernel(const __grid_constant__ AllRed
   __syncthreads();
   // Only local stores: the second phase just keeps peers from overwriting
   // their input while this rank still loads it.
-  barrier.arrive_relaxed(/*n=*/1);
+  barrier.arrive_relaxed();
 }
 
 /// `num_vecs` counts one rank's input; the output holds every rank's input,
@@ -452,9 +451,8 @@ ALL_REDUCE_KERNEL void all_gather_pull_kernel(const __grid_constant__ AllReduceP
   const auto barrier = distributed::Barrier<kWorldSize>{
       params.ws.semaphores.data(),
       params.rank,
-      /*num_arrives=*/2,
   };
-  barrier.arrive_relaxed(/*n=*/0);
+  barrier.arrive_relaxed();
   __syncthreads();
 
   const auto num_threads = blockDim.x * gridDim.x;
@@ -470,7 +468,7 @@ ALL_REDUCE_KERNEL void all_gather_pull_kernel(const __grid_constant__ AllReduceP
 
   PDLTriggerSecondary<kUsePDL>();
   __syncthreads();
-  barrier.arrive_relaxed(/*n=*/1);
+  barrier.arrive_relaxed();
 }
 
 template <uint32_t N>

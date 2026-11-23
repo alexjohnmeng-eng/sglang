@@ -235,7 +235,7 @@ class CustomAllReduceV2:
         return (
             not self.disabled
             and 0 < nbytes <= self.max_push_size
-            and 0 < num_blocks <= self._push_counter.numel()
+            and 0 < num_blocks <= self.config.num_push_blocks
         )
 
     def reserve_push_capacity(self, nbytes: int) -> None:
@@ -310,16 +310,17 @@ class CustomAllReduceV2:
         def mc_at(offset: int) -> Optional[int]:
             return multicast_ptr + offset if self.has_multicast else None
 
-        self._push_counter = torch.zeros(
-            (cfg.num_push_blocks,), dtype=torch.uint32, device=self.device
-        )
+        # The current communicator ABI uses one 64-bit EpochCounter; the launch
+        # width is carried separately as PushPlane.default_blocks.
+        self._push_counter = torch.zeros((1,), dtype=torch.int64, device=self.device)
         self._push_workspaces = slice_all([push_num_slots, self.max_push_size], 0)
         self._push_multicast_ptr = mc_at(0)
         push_plane = PushPlane(
             self.rank,
             self.world_size,
             workspaces=self._push_workspaces,
-            counter=self._push_counter.view(-1, 1).view(torch.uint8),
+            counter=self._push_counter,
+            default_blocks=cfg.num_push_blocks,
             mc_workspace=mc_at(0),
         )
         pull_plane = None
