@@ -380,7 +380,7 @@ def _shared_gate_up_takes_prequant(mlp, rows: int) -> bool:
             m > routes.triton_max_m and lookup_swapab(routes.swapab, n, k, m) is None
             for m in (rows, 2 * rows)
         )
-        )
+    )
 
 
 def _start_fp8_gather(
@@ -438,7 +438,7 @@ class CpMoeSymmTransport(ComputeTransport):
         forward_batch,
         call,
         rows,
-        comm: CpPrefillSymm,
+        comm: Optional[CpPrefillSymm],
         local_router: bool,
     ):
         mlp = layer.mlp
@@ -460,6 +460,13 @@ class CpMoeSymmTransport(ComputeTransport):
         topk = self._route_local_rows(
             mlp=mlp, hidden_states=hidden_states, local_router=local_router
         )
+        if comm is None:
+            assert topk is not None and mlp._shared_expert_tp1
+            self.input = hidden_states
+            self.topk_output = StandardTopKOutput(topk[1], topk[0], None)
+            self._local_shared = mlp._forward_shared_experts(hidden_states)
+            self._gathered_rows = _every_row_routed(forward_batch, self.source_rows)
+            return
         fp8 = (
             _start_fp8_gather(comm, mlp, hidden_states, topk)
             if topk is not None
@@ -518,6 +525,18 @@ class CpMoeSymmTransport(ComputeTransport):
             humming_deferred_mul_sum_context,
         )
 
+        if self._comm is None:
+            from sglang.srt.layers.moe.moe_runner.flashinfer_sm90_mxfp4 import (
+                run_global_ids,
+            )
+
+            topk = self.topk_output
+            assert topk is not None
+            weights = topk.topk_weights
+            if not mlp.routed_scaling_factor_fused_in_topk:
+                weights = weights * mlp.routed_scaling_factor
+            return run_global_ids(mlp.experts, self.input, weights, topk.topk_ids)
+
         # The MoE's own deferral is for the shared add it skips here, so the
         # humming run sees this context, also through mlp().
         pair_w2_input = (
@@ -559,6 +578,9 @@ class CpMoeSymmTransport(ComputeTransport):
         return routed
 
     def return_output(self, routed: torch.Tensor) -> torch.Tensor:
+        if self._comm is None:
+            assert self._local_shared is not None
+            return routed.add_(self._local_shared)
         value = reduce_scatter_with_shared(
             self._comm,
             routed=routed,
@@ -591,6 +613,27 @@ def bind_cp_moe_symm_transport(
         or hidden_states.shape[0] < _MOE_SYMM_MIN_ROWS
         or torch.cuda.is_current_stream_capturing()
     ):
+        return None
+    mlp = layer.mlp
+    if (
+        getattr(mlp.experts, "_flashinfer_sm90_mxfp4_only", False)
+        and parallel.attn_cp_size == parallel.moe_ep_size == 8
+        and mlp._shared_expert_tp1
+        and layer.cp_local_router
+        and (hidden_states.shape[0], parallel.attn_cp_size) in _LOCAL_ROUTER_ROWS
+        and (call.input_ids_global is not None or not _routes_by_token_id(mlp))
+    ):
+        return CpMoeSymmTransport(
+            layer=layer,
+            hidden_states=hidden_states,
+            forward_batch=forward_batch,
+            call=call,
+            rows=rows,
+            comm=None,
+            local_router=True,
+        )
+
+    if getattr(mlp.experts, "_flashinfer_sm90_mxfp4_only", False):
         return None
     comm = get_cp_prefill_symm(
         parallel.attn_cp_group,
