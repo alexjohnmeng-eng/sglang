@@ -638,3 +638,51 @@ selection.json, dispatch_comparison.json, dispatch_profile_review.json,
 {mmmu,gsm8k_ep8,gsm8k_ep4}_paired.json,encoder-profile/ and
 mmmu-{base-sync-full,vit-sync-full}/. Decode/GSM8K runs are under
 1123-decode-reanalysis/matrix/local-ep{8,4}-*ant-runtime-vit-20261123-222753*.
+
+## 2026-11-24 CP8 prefill W2 output sharding and FP8 transport
+
+`dd6de419d5` combines CP-local routing, Q8 sparse attention, fused Q RoPE/FP8
+writeback, a replicated shared expert, and paired W2 output sharding. Each NVLink
+pair shares an FP8 row scale for the two SwiGLU halves. Each rank sends its
+quantized half to its peer and computes 2,560 output columns. The CP
+reduce-scatter slots carry those half-width contributions for assembly.
+
+The benchmark exposes paired W2 via `PREFILL_W2_PAIR_LAYERS`, which sets
+`SGLANG_EXPERIMENT_DSV41_W2_PAIR_LAYERS` in the server container. The default
+is `0`. The measured configuration uses `40` and adds 11.21 GiB of alternate
+W2 weights per rank. The server still keeps the original W2 weights for decode
+and prefill batches that do not select the paired path.
+[Environment variables and reproduction command](benchmark/deepseek_v41_prefill/README.md#复现-dd6de41-的-w2-分片与-fp8-传输)
+
+All rows use 8 × H20, TP8 / CP8 interleave / EP1, host Engram `per_rank`,
+Humming 0.1.12 with FP8 inputs, DSPARK block size 5, and radix cache disabled.
+The client sends exact 65,536 and 262,144 input IDs with one output token,
+ten warmups and five serial samples per length. The baseline uses 16K chunks
+and the bm32 overlay. The paired variants use 64K chunks, the ntail overlay,
+Q8 attention, and TP1 shared experts.
+
+| Run | 64K input tok/s | 256K input tok/s | Full GSM8K |
+| --- | ---: | ---: | ---: |
+| Fresh Ant-aligned baseline `fbfb7f6ef9` | 76,467.09 | 74,276.38 | 1,282/1,319 |
+| Paired W2 with BF16 peer reads | 90,962.76 | 87,651.15 | 1,282/1,319 |
+| Paired W2 with FP8 peer writes `dd6de419d5` | 91,753.50 | 88,313.51 | 1,280/1,319 |
+| Retest on `perf/dsv41-h20` at `ff6e2a55ec` | 91,827.37 | 88,414.43 | 1,281/1,319 |
+
+Each GSM8K run used the same serving instance as its throughput run and
+completed all 1,319 prompts with zero request errors and identical prompt/target
+hashes. The original commit improves 64K and 256K throughput by 19.99% and
+18.90% over the fresh baseline, with two fewer correct GSM8K answers in that
+run. The integrated branch retest improves 64K throughput by 20.09%.
+
+In the 64K GPU-only captures, paired activation and quantization decreased
+from 18.82 to 11.64 ms per rank when replacing BF16 peer reads with FP8
+peer writes. This is the mean kernel-time sum across eight ranks. The transport
+microbenchmark confirmed bitwise identical FP8 codes and FP32 scales between
+the two paired variants. W13 remains the longest kernel family in the 64K
+profile. Test Humming tiles against checkpoint weights and real expert routes
+to assess the remaining W13 time.
+
+The original report, exhaustive GSM8K reviews, and eight traces per length are
+under `/data1/fjmeng2/dsv41-runtime/repro/prefill-plus20-20261124/q8-w2-pair-fp8-64/`.
+The integrated branch report is
+`/data1/fjmeng2/dsv41-runtime/repro/perf-dsv41-h20-integration-20261124/validation_summary.json`.

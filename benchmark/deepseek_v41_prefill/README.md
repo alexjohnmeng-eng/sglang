@@ -1,8 +1,8 @@
 # DeepSeek-V4.1-Flash prefill 完整复现
 
-本目录复现 `perf/dsv41-ant-prefill-alignment` 的 Ant 对齐实验：8 × H20，
-TP8 / prefill CP8 interleave / **EP1**，Engram host `per_rank`，Humming 0.1.12，
-DSPARK block size 5，bounded replay。完整启动参数见 [launch_server.sh](launch_server.sh)。
+本目录复现 8 × H20 上的 DeepSeek-V4.1 prefill。默认使用 Ant 对齐配置，包含
+TP8 / prefill CP8 interleave / **EP1**、Engram host `per_rank`、Humming 0.1.12、
+DSPARK block size 5 和 bounded replay。启动参数见 [launch_server.sh](launch_server.sh)。
 
 ## 一键运行（宿主机）
 
@@ -33,13 +33,90 @@ PREFILL_OUTPUT=/data1/fjmeng2/dsv41-runtime/repro/$(date -u +%Y%m%dT%H%M%SZ) \
 | `PREFILL_PORT` | `30002` |
 | `PREFILL_CONTAINER` | `dsv41-prefill-<UTC时间>`，必须不存在 |
 | `PREFILL_READY_TIMEOUT` | `3600` 秒 |
-| `PREFILL_KEEP_SERVER` | `0`；设为 `1` 则结束后保留服务，包括失败时 |
+| `PREFILL_KEEP_SERVER` | `0`，设为 `1` 会在脚本退出时保留服务，包括失败时 |
+| `PREFILL_CHUNK_SIZE` | `16384`，同时设置 `--chunked-prefill-size` 和 `--max-prefill-tokens` |
+| `PREFILL_ATTENTION_BACKEND` | `auto`，由服务选择。设为 `flashmla_sparse_q8` 时传入 `--dsv4-prefill-backend flashmla_sparse_q8` |
+| `PREFILL_EP_SIZE` | `1`，传给 `--ep-size`。W2 分片要求 EP1 |
+| `PREFILL_MEM_FRACTION` | `0.84`，传给 `--mem-fraction-static` |
+| `PREFILL_HUMMING_NTAIL` | `0`，对应容器内的 `SGLANG_DSV41_HUMMING_PREFILL_NTAIL`。设为 `1` 会让支持的 Humming 0.1.12 在统一服务的 `mix` 角色选用 `v0_1_12_ntail` overlay |
+| `PREFILL_SHARED_TP1` | `0`，对应 `SGLANG_SHARED_EXPERT_TP1`。设为 `1` 为每个 rank 复制 shared expert，CP prefill 在本地行上计算 |
+| `PREFILL_W2_PAIR_LAYERS` | `0`，对应 `SGLANG_EXPERIMENT_DSV41_W2_PAIR_LAYERS`。设为 `N` 时，为满足条件且编号小于 `N` 的目标层加载另一份 W2 分片。实测使用 `40` |
 
 容器使用 host network/IPC、无限 memlock、`IPC_LOCK`，不添加 `SYS_NICE`。
 不修改宿主机 THP/NUMA 配置。可预先复用现有依赖目录；目录缺少 `sgl_kernel` 或
 `sgl_fa3` 时，脚本在镜像中用 `--no-deps --target` 安装 `sglang-kernel==0.4.11`
 和 `sgl-fa3==0.1.0`（需要包源网络）。运行时会核验实际版本，依赖不匹配直接失败。
 不要把 `humming-pylibs` 0.1.18 加到 `PYTHONPATH` 前面；这会禁用已对齐的 0.1.12 overlay/tuning。
+
+## 复现 dd6de41 的 W2 分片与 FP8 传输
+
+W2 分片适用于本实验的 SM90 TP8 / CP8 interleave / EP1、Humming FP8 输入、
+FP32 累加和 TP1 shared expert。运行时要求 CP 对称内存、每 rank 至少 2,048 行、
+Top-6 路由，以及使用 `block_m=64` 的 indexed GEMM。短批、CUDA Graph capture
+等不满足条件的批次和 decode 继续使用常规 W2。设置 40 层时，额外的 W2 权重
+占用约 11.21 GiB/rank，常规 W2 权重也保留在显存中。
+
+执行下方命令可用同一服务完成 64K/256K 吞吐、八卡 GPU-only profile 和全量 GSM8K。
+在宿主机的仓库根目录运行。先在评测环境中准备 EvalScope 1.15.0 及 GSM8K 数据集，
+把 `GSM8K_DATASET_DIR` 指向本地 GSM8K `main` 数据目录。命令默认使用本项目的数据路径。
+
+```bash
+(
+  set -euo pipefail
+  run_id=$(date -u +%Y%m%dT%H%M%SZ)
+  export PREFILL_REVISION=dd6de419d5da276254874c1df7e45bb0a6e10a26
+  export PREFILL_OUTPUT="/data1/fjmeng2/dsv41-runtime/repro/w2-fp8-$run_id"
+  export PREFILL_PORT=30002 PREFILL_KEEP_SERVER=1
+  export PREFILL_CHUNK_SIZE=65536 PREFILL_ATTENTION_BACKEND=flashmla_sparse_q8
+  export PREFILL_EP_SIZE=1 PREFILL_MEM_FRACTION=0.84
+  export PREFILL_HUMMING_NTAIL=1 PREFILL_SHARED_TP1=1 PREFILL_W2_PAIR_LAYERS=40
+  dataset_dir=${GSM8K_DATASET_DIR:-/data1/fjmeng2/dsv41-runtime/datasets/gsm8k/main}
+  dataset_args=$(python3 -c '
+import json
+import sys
+print(json.dumps({"gsm8k": {"local_path": sys.argv[1], "subset_list": ["default"], "eval_split": "test"}}))
+' "$dataset_dir")
+
+  [[ ! -e "$PREFILL_OUTPUT" ]]
+  cleanup() {
+    if [[ -s "$PREFILL_OUTPUT/container_id.txt" ]]; then
+      local container_id
+      container_id=$(cat "$PREFILL_OUTPUT/container_id.txt")
+      docker logs "$container_id" > "$PREFILL_OUTPUT/server.log" 2>&1 || true
+      docker rm -f "$container_id" >/dev/null 2>&1 || true
+    fi
+  }
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  bash benchmark/deepseek_v41_prefill/run.sh
+  evalscope eval \
+    --model /models/DeepSeek-V4.1-Flash-1017 --model-id w2-fp8 \
+    --api-url "http://127.0.0.1:$PREFILL_PORT/v1" --api-key EMPTY \
+    --eval-type openai_api --model-task text_generation --datasets gsm8k \
+    --dataset-args "$dataset_args" --eval-batch-size 64 --timeout 1800 \
+    --generation-config '{"temperature":0.0,"max_tokens":2048}' \
+    --work-dir "$PREFILL_OUTPUT/gsm8k" --no-timestamp \
+    2>&1 | tee "$PREFILL_OUTPUT/gsm8k.log"
+)
+```
+
+GSM8K 使用 EvalScope 1.15.0 默认的 4-shot prompt，评测 test split 全部 1,319 题。
+查看 `gsm8k/reports/w2-fp8/gsm8k.json` 的准确率及 `execution_summary`，
+并核对 `requested=succeeded=1319`、`errored=0`、`incomplete=false`。
+原实验宿主机也可使用
+`/data1/fjmeng2/dsv41-runtime/repro/prefill-plus20-20261124/run_prefill_with_gsm8k.sh`。
+保留上面的性能配置，指定独立的 `PREFILL_OUTPUT` 和 `PREFILL_CONTAINER`，
+以仓库根目录为参数调用该脚本。它会额外生成 `gsm8k-summary.json`。
+
+`runtime_manifest.json` 记录 `SGLANG_EXPERIMENT_DSV41_W2_PAIR_LAYERS=40`、
+`SGLANG_SHARED_EXPERT_TP1=1` 和 `SGLANG_DSV41_HUMMING_PREFILL_NTAIL=1`。
+服务日志中的 `Prepared paired W2 shard` 表示备用权重已加载。64K profile 中
+`_quantize_and_push_pair`、`_sum_colored_slots` 和 Humming W2
+`Shape<0u, 2560u, 576u>` 可确认请求实际走了分片路径。当前 `compare_profiles.py`
+将这三类 kernel 计入 `Other`，分析分片时可在原始 trace 中按名称查看。
+[优化记录](../../OPTIMIZATION_PLAN.md#2026-11-24-cp8-prefill-w2-output-sharding-and-fp8-transport)
 
 ## 镜像与源码
 
@@ -74,7 +151,8 @@ PREFILL_OUTPUT=/tmp/dsv41-prefill-source \
 验证运行时：torch `2.14.1+cu130` / CUDA `13.0`，humming-kernels `0.1.12`，
 sglang-kernel `0.4.11`，sgl-fa3 `0.1.0`，sgl-deep-gemm `0.2.3.post2`，
 flashinfer-python `0.7.2`，transformers `5.19.0`，triton `3.8.0`，tilelang `0.1.12`。
-测试过程中服务器日志应包含 `v0_1_12_bm32` overlay 和 H20-3e tuned tables。
+默认配置的服务器日志应包含 `v0_1_12_bm32` overlay 和 H20-3e tuned tables。
+上述 W2 实验配置使用 `v0_1_12_ntail` overlay，启动时会记录实际加载的 overlay 和调优表。
 
 ## 严格测试口径
 
@@ -105,7 +183,9 @@ python3 benchmark/deepseek_v41_prefill/bench.py \
 另传 `--server-profile-dir <服务端的同一目录>`。不需要 profile 时省略 `--profile-dir`。
 管理端口默认使用本实验的 `profile` key，也支持 `SGLANG_ADMIN_API_KEY` / `--admin-key`。
 客户端校验 CP/TP/EP、cache 和关键服务参数；直接连接已有服务时，镜像/源码/环境变量需
-由启动方记录，一键模式则自动保存这些信息。
+由启动方记录，一键模式则自动保存这些信息。直接测 W2 实验服务时，给客户端追加
+`--expected-chunk-size 65536 --expected-attention-backend flashmla_sparse_q8
+--expected-ep-size 1 --expected-mem-fraction 0.84`。
 
 ## 结果与全部 rank 的 kernel 对比
 
@@ -146,5 +226,5 @@ python3 benchmark/deepseek_v41_prefill/compare_profiles.py \
 | 65,536 | 857.078 ms | 76,464.49 | 857.769 ms |
 | 262,144 | 3528.397 ms | 74,295.49 | 3533.834 ms |
 
-完整 GSM8K 与性能优化记录见仓库根目录 `OPTIMIZATION_PLAN.md`。
+完整 GSM8K 与性能数据见 [OPTIMIZATION_PLAN.md](../../OPTIMIZATION_PLAN.md)。
 本目录只复现 prefill；decode 仍应另用 fake prefill 测试。
