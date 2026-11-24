@@ -81,7 +81,8 @@ struct FusedQNormRopeParams {
   float eps;
 };
 
-template <typename DType, int64_t kHeadDim, int64_t kRopeDim, typename PosT, bool kUsePDL, bool kApplyNorm>
+template <typename DType, int64_t kHeadDim, int64_t kRopeDim, typename PosT, bool kUsePDL, bool kApplyNorm,
+          bool kStoreFP8>
 Q_KERNEL void fused_q_norm_rope(const __grid_constant__ FusedQNormRopeParams params) {
   using namespace device;
 
@@ -96,6 +97,7 @@ Q_KERNEL void fused_q_norm_rope(const __grid_constant__ FusedQNormRopeParams par
   static_assert(kRopeDim == kWarpThreads * 2, "1 (real, imag) pair per lane");
 
   using Storage = AlignedVector<DType, kVecSize>;
+  using OutType = std::conditional_t<kStoreFP8, fp8_e4m3_t, DType>;
 
   const auto warp_id = threadIdx.x / kWarpThreads;
   const auto lane_id = threadIdx.x % kWarpThreads;
@@ -109,7 +111,7 @@ Q_KERNEL void fused_q_norm_rope(const __grid_constant__ FusedQNormRopeParams par
   const auto input_ptr =
       static_cast<const DType*>(params.q_input) + batch_id * params.q_input_stride_batch + head_id * kHeadDim;
   const auto output_ptr =
-      static_cast<DType*>(params.q_output) + batch_id * params.q_output_stride_batch + head_id * kHeadDim;
+      static_cast<OutType*>(params.q_output) + batch_id * params.q_output_stride_batch + head_id * kHeadDim;
   const auto position = static_cast<int32_t>(static_cast<const PosT*>(params.positions)[batch_id]);
 
   __shared__ Storage s_rope[kFusedQNumWarps][kRopeSize];
@@ -162,7 +164,24 @@ Q_KERNEL void fused_q_norm_rope(const __grid_constant__ FusedQNormRopeParams par
       const auto rope_id = lane_id - (kWarpThreads - kRopeSize);
       s_rope[warp_id][rope_id] = input_vec[i];
     } else {
-      gmem.store(output_ptr, input_vec[i], i);
+#ifndef USE_ROCM
+      if constexpr (kStoreFP8) {
+        static_assert(kVecSize % 2 == 0);
+        using PackedStorage = AlignedVector<uint16_t, kVecSize / 2>;
+        PackedStorage packed;
+#pragma unroll
+        for (int pair = 0; pair < kVecSize / 2; ++pair) {
+          const float2 values = {cast<float>(input_vec[i][2 * pair]),
+                                 cast<float>(input_vec[i][2 * pair + 1])};
+          packed[pair] = __nv_cvt_float2_to_fp8x2(values, __NV_SATFINITE, __NV_E4M3);
+        }
+        tile::Memory<PackedStorage>{lane_id, kWarpThreads}.store(
+            reinterpret_cast<uint16_t*>(output_ptr), packed, i);
+      } else
+#endif
+      {
+        gmem.store(output_ptr, input_vec[i], i);
+      }
     }
   }
   __syncwarp();
@@ -195,14 +214,25 @@ Q_KERNEL void fused_q_norm_rope(const __grid_constant__ FusedQNormRopeParams par
         x_real * freq_imag + x_imag * freq_real,
     };
   }
-  mem_elem.store(output_ptr + (kHeadDim - kRopeDim), cast<DType2>(rotated));
+  const auto rounded = cast<DType2>(rotated);
+#ifndef USE_ROCM
+  if constexpr (kStoreFP8) {
+    const auto packed = __nv_cvt_float2_to_fp8x2(cast<fp32x2_t>(rounded), __NV_SATFINITE, __NV_E4M3);
+    tile::Memory<uint16_t>{lane_id, kWarpThreads}.store(
+        reinterpret_cast<uint16_t*>(output_ptr + (kHeadDim - kRopeDim)), packed);
+  } else
+#endif
+  {
+    mem_elem.store(output_ptr + (kHeadDim - kRopeDim), rounded);
+  }
 }
 
 // kApplyNorm = false only rotates the rope tail while copying Q into a (padded) output.
-template <typename DType, int64_t kHeadDim, int64_t kRopeDim, bool kApplyNorm, bool kUsePDL>
+template <typename DType, int64_t kHeadDim, int64_t kRopeDim, bool kApplyNorm, bool kUsePDL,
+          bool kStoreFP8 = false>
 struct FusedQNormRopeKernel {
   template <typename PosT>
-  static constexpr auto kernel = fused_q_norm_rope<DType, kHeadDim, kRopeDim, PosT, kUsePDL, kApplyNorm>;
+  static constexpr auto kernel = fused_q_norm_rope<DType, kHeadDim, kRopeDim, PosT, kUsePDL, kApplyNorm, kStoreFP8>;
 
   static void forward(
       const tvm::ffi::TensorView q_input,
@@ -224,8 +254,9 @@ struct FusedQNormRopeKernel {
         .verify(q_input);
     TensorMatcher({B, H, kHeadDim})  //
         .with_strides({-1, kHeadDim, 1})
-        .with_dtype<DType>()
+        .with_dtype<std::conditional_t<kStoreFP8, fp8_e4m3_t, DType>>()
         .with_device(device_)
+        .ensure_alignment(kStoreFP8 ? 8 : 1)
         .verify(q_output);
     TensorMatcher({-1, kRopeDim})  //
         .with_dtype<float>()

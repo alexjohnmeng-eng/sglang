@@ -5034,28 +5034,29 @@ class DeepseekV4AttnBackend(
         num_tokens, num_heads, head_dim = q.shape
         padded_heads = q8kv8_padded_num_heads(num_heads)
 
-        qpad = getattr(self, "_q8kv8_qpad_buf", None)
-        if (
-            qpad is None
-            or qpad.shape[0] < num_tokens
-            or qpad.shape[1] != padded_heads
-            or qpad.shape[2] != head_dim
-            or qpad.device != q.device
-        ):
-            qpad = torch.empty(
-                (num_tokens, padded_heads, head_dim),
-                dtype=fp8_dtype,
-                device=q.device,
+        if q.dtype == fp8_dtype and num_heads == padded_heads and q.is_contiguous():
+            q_fp8 = q
+        else:
+            qpad = getattr(self, "_q8kv8_qpad_buf", None)
+            if (
+                qpad is None
+                or qpad.shape[0] < num_tokens
+                or qpad.shape[1] != padded_heads
+                or qpad.shape[2] != head_dim
+                or qpad.device != q.device
+            ):
+                qpad = torch.empty(
+                    (num_tokens, padded_heads, head_dim),
+                    dtype=fp8_dtype,
+                    device=q.device,
+                )
+                self._q8kv8_qpad_buf = qpad
+
+            q_fp8, _ = cast_q_fp8_for_q8kv8_prefill(
+                q,
+                padded_num_heads=padded_heads,
+                out=qpad[:num_tokens],
             )
-            self._q8kv8_qpad_buf = qpad
-
-        qpad = qpad[:num_tokens]
-
-        q_fp8, _ = cast_q_fp8_for_q8kv8_prefill(
-            q,
-            padded_num_heads=padded_heads,
-            out=qpad,
-        )
 
         sink_pad = getattr(self, "_q8kv8_attn_sink_pad", None)
         if (
@@ -5150,11 +5151,17 @@ class DeepseekV4AttnBackend(
             )
 
             n_compressed = flat_token_ids.shape[0]
-            workspace = self.sparse_prefill_kv_buffer.get(
+            workspace, compressed_filled = self.sparse_prefill_kv_buffer.get_with_head(
                 n_compressed + cache.swa_token_ids.shape[0] + 1,
+                head_source=(
+                    extra_k_cache.data_ptr(),
+                    flat_token_ids.data_ptr(),
+                    n_compressed,
+                ),
                 dtype=fp8_dtype,
             )
-            compressed_slice = workspace[:n_compressed]
+            if not compressed_filled:
+                compressed_slice = workspace[:n_compressed]
             swa_slice = workspace[n_compressed:]
 
         # The Q8KV8 gather reads the 584-byte V4 layout only (its kernel is SM90).
@@ -5192,6 +5199,9 @@ class DeepseekV4AttnBackend(
             d_v=self.head_dim_v,
             attn_sink=attn_sink_pad,
             topk_length=combined_lens,
+            # The combine kernel bounds the length by compressed top-k plus
+            # the SWA window, which fit inside combined_indices.shape[-1].
+            check_topk_lengths=False,
         )
 
         return o[:, :active_heads]

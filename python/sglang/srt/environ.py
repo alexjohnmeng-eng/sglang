@@ -877,6 +877,7 @@ class Envs:
     SGLANG_SYNC_TOKEN_IDS_ACROSS_TP = EnvBool(False)
     SGLANG_ENABLE_COLOCATED_BATCH_GEN = EnvBool(False)
     SGLANG_SHARED_EXPERT_TP1 = EnvBool(False)
+    SGLANG_EXPERIMENT_DSV41_W2_PAIR_LAYERS = EnvInt(0)
     # Replicate the input embedding across TP ranks instead of sharding it
     # along the vocab dimension (saves an all-reduce/all-gather in the embed
     # lookup at the cost of replicated embedding weights). Drives both the

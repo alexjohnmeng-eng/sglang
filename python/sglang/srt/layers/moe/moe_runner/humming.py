@@ -64,6 +64,8 @@ class HummingDeferredMulSum:
 
     def __init__(self) -> None:
         self.mul_sum_kwargs: Optional[dict[str, Any]] = None
+        self.pair_w2_input = None
+        self.pair_w2_used = False
 
     def finalize_with_shared_add(self, shared: Optional[torch.Tensor]) -> torch.Tensor:
         """The routed output with ``shared`` added in the same kernel, bitwise
@@ -89,11 +91,11 @@ class HummingDeferredMulSum:
         )
 
     def write_all_rows_with_shared_add(
-        self, *, rows: int, rank: int, outputs: list, shared: list
+        self, *, rows: int, rank: int, outputs: list, shared: Optional[list]
     ) -> None:
         """write_rows_with_shared_add of every row block p (rows ``[p * rows,
         (p + 1) * rows)`` into ``outputs[p]`` with ``shared[p]``) in one launch,
-        targets after ``rank`` first; bitwise the same rows."""
+        targets after ``rank`` first. If ``shared`` is None, write the routed sum."""
         assert self.mul_sum_kwargs is not None
         kwargs = self.mul_sum_kwargs
         moe_fused_mul_sum_scatter(
@@ -114,10 +116,13 @@ _deferred_mul_sum: contextvars.ContextVar[Optional[HummingDeferredMulSum]] = (
 
 
 @contextmanager
-def humming_deferred_mul_sum_context() -> Iterator[HummingDeferredMulSum]:
+def humming_deferred_mul_sum_context(
+    *, pair_w2_input=None
+) -> Iterator[HummingDeferredMulSum]:
     """Indexed-GEMM runs inside return their (unwritten) output buffer and leave
     the final weighted sum to ``finalize_with_shared_add``."""
     deferred = HummingDeferredMulSum()
+    deferred.pair_w2_input = pair_w2_input
     token = _deferred_mul_sum.set(deferred)
     try:
         yield deferred
@@ -780,29 +785,55 @@ class HummingRunnerCore(MoeRunnerCore):
             **moe_kwargs1,
         )
 
-        inputs, input_scale = self._w2_input(buffers)
-
-        HummingMethod.forward_layer(
-            layer=self.layer,
-            inputs=inputs,
-            input_scale=input_scale,
-            outputs=buffers["down_output"].view(-1, hidden_states.size(-1)),
-            sublayer_name="w2",
-            **moe_kwargs2,
+        deferred = _deferred_mul_sum.get()
+        down = buffers["down_output"]
+        pair_block = (
+            deferred is not None
+            and deferred.pair_w2_input is not None
+            and hasattr(self.layer, "_pair_w2")
+            and self._act_quant_is_fusable()
+            and next(
+                cfg["block_shape"][0] for lo, hi, cfg in
+                self.get_humming_gemm_configs(HummingGemmType.INDEXED)["w13_tuning_config"]
+                if lo < moe_kwargs1["valid_shape_m"] <= hi
+            ) == 64
         )
+        if pair_block:
+            from sglang.srt.layers.moe.moe_runner.dsv41_w2_pair import run_pair_w2
+
+            width = hidden_states.size(-1) // 2
+            down = down.view(-1)[: topk_ids.numel() * width].view(-1, width)
+            run_pair_w2(
+                self.layer,
+                buffers["gate_up_output"],
+                self.swiglu_limit,
+                down,
+                moe_kwargs2,
+                deferred.pair_w2_input,
+            )
+            deferred.pair_w2_used = True
+        else:
+            inputs, input_scale = self._w2_input(buffers)
+            HummingMethod.forward_layer(
+                layer=self.layer,
+                inputs=inputs,
+                input_scale=input_scale,
+                outputs=down.view(-1, hidden_states.size(-1)),
+                sublayer_name="w2",
+                **moe_kwargs2,
+            )
 
         routed_scaling_factor = (
             self.config.routed_scaling_factor if apply_routed_scaling_factor else None
         )
         mul_sum_kwargs = dict(
-            inputs=buffers["down_output"].view(*topk_ids.shape, -1),
+            inputs=down.view(*topk_ids.shape, -1),
             topk_weights=topk_weights,
             topk_ids=topk_ids,
             is_ep=self.num_experts != self.global_num_experts,
             routed_scaling_factor=routed_scaling_factor,
             outputs=buffers["output"],
         )
-        deferred = _deferred_mul_sum.get()
         if deferred is not None:
             deferred.mul_sum_kwargs = mul_sum_kwargs
         else:

@@ -315,10 +315,9 @@ def test_fp8_planes_are_their_all_gathers(rows: int) -> None:
 
 
 @pytest.mark.parametrize("rows", [37, 2048])
-def test_deferred_reduce_is_the_merged_reduce(rows: int) -> None:
-    """With the humming weighted sum deferred, one launch writes every owner's
-    routed + shared rows into the owners' slots; the reduce-scatter must be bitwise
-    the one of the merged routed + shared rows."""
+@pytest.mark.parametrize("with_shared", [False, True])
+def test_deferred_reduce_is_the_merged_reduce(rows: int, with_shared: bool) -> None:
+    """The deferred weighted sum matches eager reduction of the same rows."""
     comm = _moe_comm()
     world, rank = comm.world_size, comm.rank
     gen = torch.Generator(device=_device()).manual_seed(80 + rows * 5 + rank)
@@ -327,7 +326,6 @@ def test_deferred_reduce_is_the_merged_reduce(rows: int) -> None:
     weights = torch.rand(world * rows, TOP_K, device=_device(), generator=gen)
     ids = torch.randint(0, 64, (world * rows, TOP_K), device=_device(), generator=gen)
     ids = ids.to(torch.int32)
-    shared = _randn(world * rows, HIDDEN, seed=90 + rows, rank=rank)
     kwargs = dict(
         inputs=values, topk_weights=weights, topk_ids=ids, routed_scaling_factor=2.5
     )
@@ -336,7 +334,10 @@ def test_deferred_reduce_is_the_merged_reduce(rows: int) -> None:
     deferred.mul_sum_kwargs = dict(
         kwargs, outputs=torch.empty_like(routed), is_ep=False
     )
-    blocks = list(shared.split(rows))
+    blocks = None
+    if with_shared:
+        shared = _randn(world * rows, HIDDEN, seed=90 + rows, rank=rank)
+        blocks = list(shared.split(rows))
     merged = reduce_scatter_with_shared(
         comm, routed=routed, shared=blocks, rows=rows
     ).clone()

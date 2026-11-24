@@ -233,7 +233,6 @@ def test_sparse_mla_q8kv8_prefill_small_heads(h_q: int, d_qk: int, with_sink: bo
 def test_sparse_mla_q8kv8_prefill_small_heads_preserves_value_key_order():
     """The FP8 transpose's row packing must select the original KV row."""
     from sglang.kernels.ops.attention.sparse_mla_q8kv8_prefill_sm90 import (
-        _get_entries,
         sparse_mla_q8kv8_prefill_fwd,
     )
 
@@ -258,29 +257,22 @@ def test_sparse_mla_q8kv8_prefill_small_heads_preserves_value_key_order():
     )
     expected = kv[:, 0].unsqueeze(1).expand(-1, 8, -1).bfloat16()
     torch.testing.assert_close(out, expected, atol=0, rtol=0)
-    # Capture the dispatch after the public API has validated the inputs.
-    dispatch = _get_entries()[2]
+    # The input lengths were checked above. Prefill produces bounded lengths on
+    # the GPU and can use the same entry point without host synchronization.
     graph = torch.cuda.CUDAGraph()
     with torch.cuda.graph(graph):
-        dispatch(
+        sparse_mla_q8kv8_prefill_fwd(
             q,
             kv,
             indices,
-            scale,
-            scale,
-            lengths,
-            out,
-            max_logits,
-            lse,
-            64,
-            64,
-            8,
-            1,
-            512,
-            512,
-            128,
             1.0,
-            torch._C._cuda_getCurrentRawStream(0),
+            scale,
+            scale,
+            topk_length=lengths,
+            out=out,
+            max_logits=max_logits,
+            lse=lse,
+            check_topk_lengths=False,
         )
     for _ in range(3):
         out.fill_(float("nan"))

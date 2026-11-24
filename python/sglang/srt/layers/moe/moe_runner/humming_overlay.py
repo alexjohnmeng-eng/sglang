@@ -100,7 +100,13 @@ def install_sm90_overlay(*, role: str) -> None:
     import humming
     from humming.jit.compiler import Compiler
 
-    path = overlay_dir_for(humming.__version__, role)
+    overlay_role = role
+    if role == "mix" and os.getenv("SGLANG_DSV41_HUMMING_PREFILL_NTAIL", "").lower() in {
+        "1", "true", "yes", "on"
+    }:
+        overlay_role = "prefill"
+        logger.info("DeepSeek-V4.1 Humming prefill ntail overlay forced for mix role")
+    path = overlay_dir_for(humming.__version__, overlay_role)
     if path is None:
         logger.warning(
             f"No humming SM90 header overlay for humming-kernels {humming.__version__} "

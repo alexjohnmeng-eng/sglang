@@ -86,13 +86,13 @@ def wait_ready(args):
             time.sleep(5)
 
 
-def validate_server(info):
+def validate_server(info, args):
     server = info.get("server_args", info)
     expected = {
         "disable_radix_cache": True,
         "tp_size": 8,
         "attn_cp_size": 8,
-        "ep_size": 1,
+        "ep_size": args.expected_ep_size,
         "enable_prefill_cp": True,
         "cp_strategy": "interleave",
         "enable_cp_decode_attn_tp": True,
@@ -101,11 +101,14 @@ def validate_server(info):
         "swa_full_tokens_ratio": 0.05,
         "speculative_algorithm": "DSPARK",
         "speculative_dspark_block_size": 5,
-        "mem_fraction_static": 0.84,
+        "mem_fraction_static": args.expected_mem_fraction,
         "max_running_requests": 64,
         "cuda_graph_max_bs_decode": 64,
-        "chunked_prefill_size": 16384,
+        "chunked_prefill_size": args.expected_chunk_size,
+        "max_prefill_tokens": args.expected_chunk_size,
     }
+    if args.expected_attention_backend != "auto":
+        expected["dsv4_prefill_backend"] = args.expected_attention_backend
     mismatch = {
         k: {"expected": v, "actual": server.get(k)}
         for k, v in expected.items()
@@ -264,6 +267,10 @@ def parse_args():
         "--server-container", help="Fail early if an owned Docker server exits"
     )
     parser.add_argument("--profile-timeout", type=float, default=300)
+    parser.add_argument("--expected-chunk-size", type=int, default=16384)
+    parser.add_argument("--expected-attention-backend", default="auto")
+    parser.add_argument("--expected-ep-size", type=int, default=1)
+    parser.add_argument("--expected-mem-fraction", type=float, default=0.84)
     args = parser.parse_args()
     if args.warmup < 0 or args.repeat < 1 or min(args.lengths) < 1:
         parser.error("Require warmup >= 0, repeat >= 1 and positive input lengths")
@@ -302,7 +309,7 @@ def main():
     wait_ready(args)
     info = call(args, "/get_server_info")
     save(root / "server_info.json", info)
-    validate_server(info)
+    validate_server(info, args)
     rng = random.Random(42)
     all_ids = [rng.randint(10000, 100000) for _ in range(max(args.lengths))]
     rows = []

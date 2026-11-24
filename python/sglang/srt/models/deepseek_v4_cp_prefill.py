@@ -74,6 +74,7 @@ _LOCAL_ROUTER_ROWS = {
     (2048, 4): 2048,
     (2048, 8): 2048,
     (4096, 4): 4096,
+    (8192, 8): 8192,
 }
 _LOCAL_ROUTER_DEVICES = ("NVIDIA H20", "NVIDIA H20-3e")
 # int32 side-payload columns behind the top-k for the fp8 gather's humming scales
@@ -197,12 +198,10 @@ def start_cp_compressor_gather(
 
 def cp_moe_symm_supported(mlp) -> bool:
     """Whether ``mlp`` splits into what CpMoeSymmTransport runs: routed experts
-    on the Humming runner and a separate, TP-sharded shared expert whose output
-    the MoE adds to the routed rows before the TP sum."""
+    on the Humming runner and a separate shared expert."""
     return (
         mlp.shared_experts is not None
         and mlp.num_fused_shared_experts == 0
-        and not mlp._shared_expert_tp1
         and not mlp._fuse_shared_experts_inside_sbo
         and not mlp._enable_a2a_moe
         and not mlp.reduce_results
@@ -300,7 +299,7 @@ def reduce_scatter_with_shared(
     comm: CpPrefillSymm,
     *,
     routed: torch.Tensor,
-    shared: List[torch.Tensor],
+    shared: Optional[List[torch.Tensor]],
     rows: int,
     deferred: Optional["HummingDeferredMulSum"] = None,
 ) -> torch.Tensor:
@@ -308,8 +307,8 @@ def reduce_scatter_with_shared(
     hidden] partials on every rank): the MoE's ``routed += shared`` (one bf16
     rounding) is written straight into each owner's slot, then summed there.
 
-    With ``deferred`` (the humming run left its weighted sum unwritten, ``routed``
-    is not read) one launch computes every owner's rows and writes them there."""
+    With ``deferred``, one launch computes every owner's weighted sum and writes
+    it into the peer's slot. A replicated shared expert is added after the sum."""
     if deferred is not None:
 
         def write_all(outs: List[torch.Tensor]) -> None:
@@ -317,10 +316,17 @@ def reduce_scatter_with_shared(
                 rows=rows, rank=comm.rank, outputs=outs, shared=shared
             )
 
+        if deferred.pair_w2_used:
+            assert shared is None
+            return comm.reduce_scatter_pair_w2(rows, write_all)
         return comm.reduce_scatter(rows, write_all=write_all)
 
     def write_rows(p: int, out: torch.Tensor) -> None:
-        torch.add(routed[p * rows : (p + 1) * rows], shared[p], out=out)
+        partial = routed[p * rows : (p + 1) * rows]
+        if shared is None:
+            out.copy_(partial)
+        else:
+            torch.add(partial, shared[p], out=out)
 
     return comm.reduce_scatter(rows, write_rows)
 
@@ -382,7 +388,7 @@ def _start_fp8_gather(
     gate_up input (block32 fp8 + scales), about the bf16 bytes. Both quants are
     row-local, so the consumers' results are bitwise. None: not this layer."""
     rows = hidden_states.shape[0]
-    if not _shared_gate_up_takes_prequant(mlp, rows):
+    if not mlp._shared_expert_tp1 and not _shared_gate_up_takes_prequant(mlp, rows):
         return None
     from sglang.srt.layers.moe.moe_runner.humming import humming_quant_input_rows
 
@@ -390,9 +396,11 @@ def _start_fp8_gather(
     if quant is None:
         return None
     q, scale = quant
-    q_shared, scale_shared = block32_act_quant_ue8m0_mn_major(hidden_states)
     side = torch.cat([_pack_topk(*topk), scale.view(torch.int32)], dim=1)
-    parts = [q, q_shared, scale_shared.contiguous()]
+    parts = [q]
+    if not mlp._shared_expert_tp1:
+        q_shared, scale_shared = block32_act_quant_ue8m0_mn_major(hidden_states)
+        parts.extend((q_shared, scale_shared.contiguous()))
     if not (comm.fits(parts) and comm.fits_side(side, rows)):
         return None
     return comm.start_gather_planar(parts, side=side), scale.shape[1]
@@ -437,6 +445,8 @@ class CpMoeSymmTransport(ComputeTransport):
         self._comm = comm
         self._batch = forward_batch
         self._deferred: Optional[HummingDeferredMulSum] = None
+        self._shared: Optional[List[torch.Tensor]] = None
+        self._local_shared: Optional[torch.Tensor] = None
         # (fp8 gathered rows, their humming scales) of an fp8 gather, else None.
         self._pre_quant: Optional[Tuple[torch.Tensor, torch.Tensor]] = None
         top_k = mlp.config.num_experts_per_tok
@@ -450,7 +460,10 @@ class CpMoeSymmTransport(ComputeTransport):
         )
         if fp8 is not None:
             pending, scale_cols = fp8
-            self._shared = _shared_on_landed_planes(mlp, pending)
+            if mlp._shared_expert_tp1:
+                self._local_shared = mlp._forward_shared_experts(hidden_states)
+            else:
+                self._shared = _shared_on_landed_planes(mlp, pending)
             q = pending.finish_parts()[0]
             side = pending.finish_side()
             scale = side[:, 2 * top_k : 2 * top_k + scale_cols].contiguous()
@@ -462,7 +475,12 @@ class CpMoeSymmTransport(ComputeTransport):
             if side is not None and not comm.fits_side(side, self.source_rows):
                 side = None
             pending = comm.start_gather(hidden_states, side=side)
-            self._shared = shared_on_landed_shards(mlp._forward_shared_experts, pending)
+            if mlp._shared_expert_tp1:
+                self._local_shared = mlp._forward_shared_experts(hidden_states)
+            else:
+                self._shared = shared_on_landed_shards(
+                    mlp._forward_shared_experts, pending
+                )
             self.input = pending.finish()
             self.topk_output = (
                 _unpack_topk(pending.finish_side(), top_k) if side is not None else None
@@ -495,7 +513,15 @@ class CpMoeSymmTransport(ComputeTransport):
 
         # The MoE's own deferral is for the shared add it skips here, so the
         # humming run sees this context, also through mlp().
-        with humming_deferred_mul_sum_context() as deferred:
+        pair_w2_input = (
+            self._comm.pair_w2_input
+            if self._local_shared is not None
+            and self._comm.world_size == 8
+            and mlp.config.num_experts_per_tok == 6
+            and hasattr(mlp.experts, "_pair_w2")
+            else None
+        )
+        with humming_deferred_mul_sum_context(pair_w2_input=pair_w2_input) as deferred:
             if self.topk_output is not None:
                 routed = mlp.experts(
                     self.input, self.topk_output, pre_quant_input=self._pre_quant
@@ -533,11 +559,14 @@ class CpMoeSymmTransport(ComputeTransport):
             rows=self.source_rows,
             deferred=self._deferred,
         )
+        if self._local_shared is not None:
+            value.add_(self._local_shared)
+            self._local_shared = None
         self._shared = self._deferred = None
         return value
 
     def release(self):
-        self.input = self._shared = self.topk_output = None
+        self.input = self._shared = self._local_shared = self.topk_output = None
         self._deferred = self._pre_quant = None
 
 

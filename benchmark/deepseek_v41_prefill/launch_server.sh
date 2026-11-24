@@ -15,6 +15,7 @@ export HF_HUB_OFFLINE=1
 export PYTHONUNBUFFERED=1
 export SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND=python
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export SGLANG_DSV41_HUMMING_PREFILL_NTAIL="${PREFILL_HUMMING_NTAIL:-0}"
 
 python3 /repro/tools/manifest.py runtime /repro/results
 command=(python3 -m sglang.launch_server
@@ -23,12 +24,17 @@ command=(python3 -m sglang.launch_server
   --host 0.0.0.0 --port "${PREFILL_PORT:-30002}" --admin-api-key profile
   --trust-remote-code --language-model-only --model-impl sglang
   --tp-size 8 --enable-prefill-cp --cp-strategy interleave
+  --ep-size "${PREFILL_EP_SIZE:-1}"
   --enable-cp-decode-attn-tp --moe-runner-backend humming
   --enable-decoder-swa-bounded-replay --swa-full-tokens-ratio 0.05
   --speculative-algorithm DSPARK --speculative-dspark-block-size 5
-  --mem-fraction-static 0.84 --max-running-requests 64
-  --cuda-graph-max-bs-decode 64 --chunked-prefill-size 16384
+  --mem-fraction-static "${PREFILL_MEM_FRACTION:-0.84}" --max-running-requests 64
+  --cuda-graph-max-bs-decode 64 --chunked-prefill-size "${PREFILL_CHUNK_SIZE:-16384}"
+  --max-prefill-tokens "${PREFILL_CHUNK_SIZE:-16384}"
   --disable-radix-cache)
+if [[ "${PREFILL_ATTENTION_BACKEND:-auto}" != auto ]]; then
+  command+=(--dsv4-prefill-backend "$PREFILL_ATTENTION_BACKEND")
+fi
 printf '%q ' "${command[@]}" > /repro/results/launch_command.txt
 printf '\n' >> /repro/results/launch_command.txt
 exec "${command[@]}"

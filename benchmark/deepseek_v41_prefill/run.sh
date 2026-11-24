@@ -89,6 +89,13 @@ docker run -d --name "$container" --gpus all --ipc=host --network=host \
   --ulimit memlock=-1 --ulimit stack=67108864 --ulimit core=0 \
   --cap-add IPC_LOCK "${device_args[@]}" \
   -e PREFILL_PORT="$port" \
+  -e PREFILL_CHUNK_SIZE="${PREFILL_CHUNK_SIZE:-16384}" \
+  -e PREFILL_ATTENTION_BACKEND="${PREFILL_ATTENTION_BACKEND:-auto}" \
+  -e PREFILL_HUMMING_NTAIL="${PREFILL_HUMMING_NTAIL:-0}" \
+  -e PREFILL_EP_SIZE="${PREFILL_EP_SIZE:-1}" \
+  -e PREFILL_MEM_FRACTION="${PREFILL_MEM_FRACTION:-0.84}" \
+  -e SGLANG_EXPERIMENT_DSV41_W2_PAIR_LAYERS="${PREFILL_W2_PAIR_LAYERS:-0}" \
+  -e SGLANG_SHARED_EXPERT_TP1="${PREFILL_SHARED_TP1:-0}" \
   -v "$model:/models/DeepSeek-V4.1-Flash-1017:ro" \
   -v "$output/source:/repro/source:ro" -v "$output/tools:/repro/tools:ro" \
   -v "$output:/repro/results" -v "$deps:/repro/deps:ro" \
@@ -103,5 +110,9 @@ python3 "$output/tools/bench.py" --base-url "http://127.0.0.1:$port" \
   --wait-ready "${PREFILL_READY_TIMEOUT:-3600}" --output "$output/benchmark" \
   --profile-dir "$output/profiles" --server-profile-dir /repro/results/profiles \
   --lengths 65536 262144 --warmup 10 --repeat 5 \
+  --expected-chunk-size "${PREFILL_CHUNK_SIZE:-16384}" \
+  --expected-attention-backend "${PREFILL_ATTENTION_BACKEND:-auto}" \
+  --expected-ep-size "${PREFILL_EP_SIZE:-1}" \
+  --expected-mem-fraction "${PREFILL_MEM_FRACTION:-0.84}" \
   2>&1 | tee "$output/client.log"
 echo "Benchmark complete. Summary: $output/benchmark/summary.md"

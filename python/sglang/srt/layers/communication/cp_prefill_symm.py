@@ -221,6 +221,7 @@ class CpPrefillSymm:
             if side_cols
             else None
         )
+        self._pair_w2_bufs = None
         self._stream = torch.cuda.Stream(device=device)
         self._events = [torch.cuda.Event() for _ in range(world_size)]
         torch.cuda.synchronize()
@@ -377,6 +378,64 @@ class CpPrefillSymm:
             side_gathered=side_gathered,
             planes=mine,
         )
+
+    def pair_w2_input(self, gate_up: torch.Tensor, swiglu_limit: float):
+        from sglang.kernels.ops.moe.dsv41_pair_w2 import (
+            quantize_and_push_pair,
+            store_gated_and_peak,
+        )
+
+        routes, twice_width = gate_up.shape
+        width = twice_width // 2
+        max_routes = self.max_rows * 6
+        assert self.world_size == 8 and width == 288 and routes <= max_routes
+        if self._pair_w2_bufs is None:
+            # Peer-visible layout is [FP32 row peaks | FP8 pairs]. The BF16
+            # intermediates stay in their producer's local HBM.
+            self._pair_w2_storage, self._pair_w2_handle = _allocate(
+                max_routes * (4 + 2 * width),
+                device=gate_up.device,
+                cpu_group=get_parallel().attn_cp_group.cpu_group,
+            )
+            self._pair_w2_gated = torch.empty(
+                (max_routes, width), dtype=torch.bfloat16, device=gate_up.device
+            )
+            self._pair_w2_peaks = [
+                self._pair_w2_handle.get_buffer(rank, [max_routes], torch.float32, 0)
+                for rank in range(self.world_size)
+            ]
+            self._pair_w2_bufs = [
+                self._pair_w2_handle.get_buffer(
+                    rank, [max_routes, 2 * width], torch.float8_e4m3fn, 4 * max_routes
+                )
+                for rank in range(self.world_size)
+            ]
+
+        left = self.rank // 2 * 2
+        peer = self.rank ^ 1
+        gated = self._pair_w2_gated[:routes]
+        local = self._pair_w2_bufs[self.rank][:routes]
+        remote = self._pair_w2_bufs[peer][:routes]
+        scale = torch.empty((routes, 1), dtype=torch.float32, device=gate_up.device)
+        store_gated_and_peak(gate_up, gated, self._pair_w2_peaks[self.rank], swiglu_limit)
+        self._pair_w2_handle.barrier(channel=0)
+        quantize_and_push_pair(
+            gated, self._pair_w2_peaks[left], self._pair_w2_peaks[left + 1],
+            local, remote, scale, self.rank % 2,
+        )
+        self._pair_w2_handle.barrier(channel=1)
+        return local, scale
+
+    def reduce_scatter_pair_w2(self, rows: int, write_all) -> torch.Tensor:
+        from sglang.kernels.ops.moe.dsv41_pair_w2 import sum_colored_slots
+
+        assert self._reduce_bufs is not None and self.world_size == 8
+        assert 0 < rows * self.world_size <= self.max_rows
+        half_width = self.width // 2
+        own = slice(self.rank * rows, (self.rank + 1) * rows)
+        write_all([peer.view(-1, half_width)[own] for peer in self._reduce_bufs])
+        self._handle.barrier(channel=_REDUCE_CHANNEL)
+        return sum_colored_slots(self._reduce_bufs[self.rank], rows, self.width)
 
     def reduce_scatter(
         self,

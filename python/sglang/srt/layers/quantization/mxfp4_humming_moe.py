@@ -63,6 +63,11 @@ class Mxfp4HummingMoEMethod:
             **extra_weight_attrs,
         )
 
+        if envs.SGLANG_EXPERIMENT_DSV41_W2_PAIR_LAYERS.get():
+            from sglang.srt.layers.moe.moe_runner.dsv41_w2_pair import init_pair_w2_weights
+
+            init_pair_w2_weights(layer)
+
     def process_weights_after_loading(self, layer: Module) -> None:
         from sglang.srt.layers.quantization.humming_utils import (
             prepare_humming_moe_layer,
@@ -137,6 +142,10 @@ class Mxfp4HummingMoEMethod:
 
         prepare_humming_moe_layer(layer, {"quant_method": "mxfp4"})
         layer._dsv4_mxfp4_backend = "humming"
+        if hasattr(layer, "_pair_w2"):
+            from sglang.srt.layers.moe.moe_runner.dsv41_w2_pair import prepare_pair_w2_weights
+
+            prepare_pair_w2_weights(layer)
 
     def apply(
         self,

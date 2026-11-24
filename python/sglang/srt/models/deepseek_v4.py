@@ -1914,7 +1914,14 @@ class MQALayer(MqaAttentionBase):
             return q
         if not self.q_head_norm:
             if q_out is not None and q_out.dtype == torch.float8_e4m3fn:
-                fused_q_norm_rope(q, q_out, None, self.freqs_cis, positions)
+                fused_q_norm_rope(
+                    q,
+                    q_out,
+                    None,
+                    self.freqs_cis,
+                    positions,
+                    fused_fp8_store=get_platform().is_sm90,
+                )
                 return q_out
             # TODO: enable zero-copy path to skip the extra no-rope copy overhead
             if (_is_cuda or _is_gfx95_supported) and q_out is not None:
@@ -2983,6 +2990,32 @@ class MQALayer(MqaAttentionBase):
         row_plan = None
         if self.use_mega_attention:
             kernel_num_heads = 64 if self.n_local_heads <= 64 else 128
+        elif (
+            get_platform().is_sm90
+            and self.attn_proj is not None
+            and self.is_dsv41
+            and not self.q_head_norm
+            and is_cp_active(forward_batch)
+            and self.attn_tp_size == 1
+            and self.n_local_heads == 64
+            and not (
+                unified or cp_capture or enable_multi_stream or low_ratio_multi_stream
+            )
+            and not is_in_breakable_cuda_graph()
+            and use_dsv4_q8kv8_sparse_prefill(
+                getattr(attn_backend, "dsv4_prefill_backend", "auto")
+            )
+            and attn_backend._use_sparse_prefill(
+                forward_batch, num_qo_tokens=x.shape[0]
+            )
+        ):
+            # This branch feeds the Q8KV8 sparse prefill kernel directly.
+            kernel_num_heads = self.n_local_heads
+            q_out = torch.empty(
+                (x.shape[0], self.n_local_heads, self.head_dim),
+                dtype=torch.float8_e4m3fn,
+                device=x.device,
+            )
         elif (
             self.is_dsv41
             and not self.q_head_norm
