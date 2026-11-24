@@ -32,11 +32,18 @@ def run_enabled() -> bool:
     return envs.SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN.get()
 
 
+def _use_deepgemm() -> bool:
+    return envs.SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM.get()
+
+
 def available() -> bool:
     if not enabled() or get_device_sm() != 90:
         return False
     try:
-        import flashinfer.megamoe  # noqa: F401
+        if _use_deepgemm():
+            import deep_gemm_mega  # noqa: F401
+        else:
+            import flashinfer.megamoe  # noqa: F401
     except ImportError:
         return False
     return get_parallel().moe_ep_size == 8
@@ -94,10 +101,8 @@ def prepare_layer(layer: torch.nn.Module) -> bool:
     if getattr(layer, "moe_tp_size", 1) != 1:
         return False
     try:
-        from flashinfer.megamoe import transform_mxfp4_weights_for_mega_moe
-
-        w13 = _checkpoint_to_marlin_bytes(layer.w13_weight.data)
-        w2 = _checkpoint_to_marlin_bytes(layer.w2_weight.data)
+        w13 = layer.w13_weight.data
+        w2 = layer.w2_weight.data
         w13_scale = _raw_scale_bytes(layer.w13_weight_scale_inv.data)
         w2_scale = _raw_scale_bytes(layer.w2_weight_scale_inv.data)
         if w13.shape[1:] != (4608, 2560) or w2.shape[1:] != (5120, 1152):
@@ -108,17 +113,28 @@ def prepare_layer(layer: torch.nn.Module) -> bool:
                 tuple(w2.shape),
             )
             return False
-        transformed = transform_mxfp4_weights_for_mega_moe(
-            (w13, w13_scale), (w2, w2_scale)
-        )
+        if _use_deepgemm():
+            from deep_gemm_mega import (
+                transform_weights_for_fp8_mxfp4_fused_mega_moe_sm90,
+            )
+
+            transformed = transform_weights_for_fp8_mxfp4_fused_mega_moe_sm90(
+                (w13, w13_scale), (w2, w2_scale), layout="tiled"
+            )
+        else:
+            from flashinfer.megamoe import transform_mxfp4_weights_for_mega_moe
+
+            transformed = transform_mxfp4_weights_for_mega_moe(
+                (_checkpoint_to_marlin_bytes(w13), w13_scale),
+                (_checkpoint_to_marlin_bytes(w2), w2_scale),
+            )
         layer._flashinfer_sm90_mxfp4_weights = transformed
         layer._flashinfer_sm90_num_local_experts = w13.shape[0]
         logger.info(
-            "FlashInfer SM90 MXFP4 prepared layer=%s local_experts=%d bytes=(%d,%d)",
+            "%s SM90 MXFP4 prepared layer=%s local_experts=%d",
+            "DeepGEMM" if _use_deepgemm() else "FlashInfer",
             getattr(layer, "layer_id", "?"),
             w13.shape[0],
-            transformed[0].numel(),
-            transformed[1].numel(),
         )
         return True
     except (ImportError, AttributeError, RuntimeError, TypeError, ValueError) as exc:
@@ -130,30 +146,33 @@ def prepare_layer(layer: torch.nn.Module) -> bool:
         return False
 
 
-def get_prepared_weights(
-    layer: torch.nn.Module,
-) -> Optional[tuple[torch.Tensor, torch.Tensor]]:
+def get_prepared_weights(layer: torch.nn.Module):
     return getattr(layer, "_flashinfer_sm90_mxfp4_weights", None)
 
 
 def _get_buffer(capacity: int, num_experts: int):
-    import flashinfer.megamoe as megamoe
-
     parallel = get_parallel()
     group = parallel.moe_ep_group.device_group
     key = (id(group), capacity, num_experts)
     buffer = _BUFFERS.get(key)
     if buffer is None:
-        buffer = megamoe.MegaMoESymmBuffer(
-            group,
-            num_experts,
-            capacity,
-            6,
-            5120,
-            2304,
-        )
+        if _use_deepgemm():
+            from deep_gemm_mega import get_symm_buffer_for_sm90_mega_moe
+
+            buffer = get_symm_buffer_for_sm90_mega_moe(
+                group, num_experts, capacity, 6, 5120, 2304, fused=True
+            )
+        else:
+            from flashinfer.megamoe import MegaMoESymmBuffer
+
+            buffer = MegaMoESymmBuffer(group, num_experts, capacity, 6, 5120, 2304)
         _BUFFERS[key] = buffer
-        logger.info("FlashInfer SM90 MXFP4 buffer ready capacity=%d", capacity)
+        logger.info(
+            "%s SM90 MXFP4 buffer ready capacity=%d bytes=%d",
+            "DeepGEMM" if _use_deepgemm() else "FlashInfer",
+            capacity,
+            buffer.buffer.nbytes,
+        )
     return buffer
 
 
@@ -212,7 +231,6 @@ def run_global_ids(
     if capacity <= 0:
         raise ValueError("SM90 MegaMoE needs positive token capacity")
     buffer = _get_buffer(capacity, total_experts)
-    from flashinfer import megamoe
     from sglang.kernels.ops.quantization.fp8_kernel import (
         sglang_per_token_group_quant_fp8,
     )
@@ -220,6 +238,31 @@ def run_global_ids(
     output = torch.empty_like(hidden_states)
     ids = topk_ids.to(torch.int64)
     route_weights = topk_weights.float().contiguous()
+    if _use_deepgemm():
+        from deep_gemm_mega import fp8_mxfp4_mega_moe
+
+        for offset in range(0, num_tokens, capacity):
+            part = slice(offset, min(offset + capacity, num_tokens))
+            rows = part.stop - part.start
+            sglang_per_token_group_quant_fp8(
+                hidden_states[part],
+                128,
+                output_q=buffer.x[:rows],
+                output_s=buffer.x_sf[:rows],
+            )
+            buffer.topk_idx[:rows].copy_(ids[part])
+            buffer.topk_weights[:rows].copy_(route_weights[part])
+            fp8_mxfp4_mega_moe(
+                output[part],
+                *weights,
+                buffer,
+                activation_clamp=10.0,
+                num_tokens_bound=rows,
+            )
+        return output
+
+    from flashinfer import megamoe
+
     if (
         tune_prefill
         and num_tokens == capacity == 8192

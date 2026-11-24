@@ -2171,6 +2171,7 @@ class Envs:
     # Run the prepared SM90 MXFP4 weights through FlashInfer's fused EP kernel.
     SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN = EnvBool(False)
     SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS = EnvInt(8192)
+    SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM = EnvBool(False)
     SGLANG_FP8_PAGED_MQA_LOGITS_TORCH = EnvBool(False)
     SGLANG_OPT_FLASHMLA_SPARSE_PREFILL = EnvBool(True)
     # gfx950 DeepSeek-V4.1 prefill: attend with aiter's OPUS sparse kernel over a bf16

@@ -85,9 +85,16 @@ device_args=()
 if [[ -d /dev/infiniband ]]; then
   device_args+=(--device /dev/infiniband:/dev/infiniband)
 fi
+experiment_args=()
+if [[ -n "${PREFILL_DEEPGEMM473_SITE:-}" ]]; then
+  experiment_args+=(
+    -e SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM=1
+    -v "$PREFILL_DEEPGEMM473_SITE:/repro/deepgemm473:ro"
+  )
+fi
 docker run -d --name "$container" --gpus all --ipc=host --network=host \
   --ulimit memlock=-1 --ulimit stack=67108864 --ulimit core=0 \
-  --cap-add IPC_LOCK "${device_args[@]}" \
+  --cap-add IPC_LOCK "${device_args[@]}" "${experiment_args[@]}" \
   -e PREFILL_PORT="$port" \
   -e PREFILL_CHUNK_SIZE="${PREFILL_CHUNK_SIZE:-16384}" \
   -e PREFILL_ATTENTION_BACKEND="${PREFILL_ATTENTION_BACKEND:-auto}" \
@@ -96,6 +103,8 @@ docker run -d --name "$container" --gpus all --ipc=host --network=host \
   -e PREFILL_MEM_FRACTION="${PREFILL_MEM_FRACTION:-0.84}" \
   -e SGLANG_EXPERIMENT_DSV41_W2_PAIR_LAYERS="${PREFILL_W2_PAIR_LAYERS:-0}" \
   -e SGLANG_SHARED_EXPERT_TP1="${PREFILL_SHARED_TP1:-0}" \
+  -v "${PREFILL_FLASHINFER_SITE:?}:/repro/flashinfer:ro" \
+  -v "${PREFILL_EP_PLACEMENT:?}:/repro/ep-placement.json:ro" \
   -v "$model:/models/DeepSeek-V4.1-Flash-1017:ro" \
   -v "$output/source:/repro/source:ro" -v "$output/tools:/repro/tools:ro" \
   -v "$output:/repro/results" -v "$deps:/repro/deps:ro" \

@@ -710,3 +710,55 @@ The original capture and repeat are in `w2-shared-add-serving/` and
 `w2-shared-add-repeat/` under
 `/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-20261124/`. The same directory
 contains the isolated kernel test and `run_w2_shared_add.sh`.
+
+## 2026-11-25 CP8/EP8 DeepGEMM MXFP4 and C2 prefill
+
+The local experiment uses DeepGEMM #473 at `724a799bd0` for routed MXFP4
+experts, with 56 physical experts per rank and the same replica placement
+used by the FlashInfer comparison. The isolated extension is imported as
+`deep_gemm_mega`. The image extension continues to serve dense GEMM and
+paged indexer metadata. The isolated build hides C++ symbols and uses a
+separate JIT namespace to keep the two extensions' global state independent.
+
+| Run | 64K input tok/s | 256K input tok/s | Full GSM8K |
+| --- | ---: | ---: | ---: |
+| FlashInfer CP8/EP8, 4 stages | 92,083.04 | 89,130.57 | 1,279/1,319 |
+| DeepGEMM CP8/EP8 | 96,266.73 | 92,956.63 | 1,276/1,319 |
+| DeepGEMM with rank-major C2 | 97,768.53 | 94,217.98 | 1,278/1,319 |
+| Same-source C2 repeat | 97,872.18 | 94,307.43 | 1,282/1,319 |
+
+The comparison used 8×H20, `lmsysorg/sglang:latest`, TP8, CP8 interleave,
+EP8, per-rank host Engram, 64K chunks, Q8 attention and radix caching
+turned off. Each size ran 10 warmups and five serial samples with one
+output token. Full GSM8K used the same server and had zero request errors
+in all four runs. The two C2 runs returned the same next-token IDs for
+all four 64K/256K prompts with seeds 42 and 43. One of the four IDs differed
+from the DeepGEMM run before C2.
+
+C2 reduced eight-rank GPU span from 669.102 to 659.043 ms at 64K and
+from 2782.027 to 2739.154 ms at 256K on the repeat. The profiler recorded
+3 and 12 C2 pooling launches per rank. The four SM90 C2 tests passed,
+including 52 subtests. The separate schedule sweep kept the default
+split-M lag schedule. A 56-expert wave saved under 0.06 ms per layer on
+three tested routes and used 3.57 GiB/rank of workspace versus 0.85 GiB.
+
+Run a new full measurement from the local worktree. The wrapper mounts
+the isolated extension using `PREFILL_DEEPGEMM473_SITE`. It also sets
+`SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM=1` and gives the extension
+its own `DG473_JIT_CACHE_DIR`.
+
+```bash
+runtime=/data1/fjmeng2/dsv41-runtime
+results="$runtime/repro/prefill-110k-20261124"
+repo="$runtime/worktrees/prefill-deepgemm473-c2"
+PREFILL_EXPERIMENT_REPO="$repo" \
+PREFILL_REVISION="$(git -C "$repo" rev-parse HEAD)" \
+PREFILL_RUN_NAME=deepgemm473-c2-repro \
+bash "$results/run_deepgemm473_serving.sh"
+```
+
+The run directories `deepgemm473-c2/` and `deepgemm473-c2-repeat/` under
+`results` contain the launch arguments, source manifest, raw samples,
+all-rank profiles, evaluation reviews and long-prompt probes. The
+`upstream-20261125/` subdirectory contains the source revision, isolated
+wheel, build log, isolation diff, and reference and schedule benchmarks.

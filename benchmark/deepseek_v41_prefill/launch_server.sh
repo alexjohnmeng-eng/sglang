@@ -3,8 +3,15 @@
 set -euo pipefail
 ulimit -c 0
 export PATH=/opt/sglang/bin:$PATH
-export PYTHONPATH=/repro/deps:/repro/source/python
+export PYTHONPATH=/repro/flashinfer:/repro/deps:/repro/source/python
+if [[ "${SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM:-0}" == 1 ]]; then
+  export PYTHONPATH="/repro/deepgemm473:$PYTHONPATH"
+  export DG473_JIT_CACHE_DIR=/repro/cache/deepgemm473
+fi
+export SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN=1
+export SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS=8192
 export SGLANG_CACHE_DIR=/repro/cache
+export SGLANG_JIT_CACHE_DIR=/repro/cache/sgl_kernel_jit
 export SGLANG_OPT_DSV41_SM90=1
 export SGLANG_OPT_FP8_WO_A_GEMM=1
 export SGLANG_ENABLE_DSV41_ENGRAM_HOST_TABLE=1
@@ -24,7 +31,9 @@ command=(python3 -m sglang.launch_server
   --host 0.0.0.0 --port "${PREFILL_PORT:-30002}" --admin-api-key profile
   --trust-remote-code --language-model-only --model-impl sglang
   --tp-size 8 --enable-prefill-cp --cp-strategy interleave
-  --ep-size "${PREFILL_EP_SIZE:-1}"
+  --ep-size "${PREFILL_EP_SIZE:-8}"
+  --ep-num-redundant-experts 64 --ep-dispatch-algorithm dynamic
+  --init-expert-location /repro/ep-placement.json
   --enable-cp-decode-attn-tp --moe-runner-backend humming
   --enable-decoder-swa-bounded-replay --swa-full-tokens-ratio 0.05
   --speculative-algorithm DSPARK --speculative-dspark-block-size 5

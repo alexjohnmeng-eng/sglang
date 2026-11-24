@@ -151,22 +151,43 @@ def start_cp_kv_gather(
 
 
 def start_cp_compressor_gather(
-    *, compressor, x: torch.Tensor, forward_batch
+    *, compressor, x: torch.Tensor, forward_batch, rank_major: bool = False
 ) -> Callable[[], Tuple[Optional[torch.Tensor], ...]]:
     """Project this rank's rows for the low-ratio compressor and start their CP
-    all-gather; the returned call gives the projections of every CP row in global
-    token order (``forward_low_ratio_sources(cp_projected=...)``)."""
-    projected = compressor.project(x)
-    parts = [value for value in projected if value is not None]
-    total = int(forward_batch.attn_cp_metadata.total_seq_lens)
+    all-gather. For a uniform interleave batch the caller may consume the two
+    rank-major planes as [ranks, local rows, width]."""
+    metadata = forward_batch.attn_cp_metadata
+    width = compressor.norm.weight.numel()
     plan = _interleave_plan(
         local_rows=x.shape[0],
         forward_batch=forward_batch,
         user="compressor",
         # The widest row, ratio 2's fp32 kv and score, in bf16 columns; ratio 1
         # shares these buffers.
-        width=4 * parts[0].shape[1],
+        width=4 * width,
     )
+    if rank_major and plan is not None:
+        comm, send_rows, slot_rows = plan
+        if (
+            send_rows == slot_rows == x.shape[0]
+            and metadata.gather_index is None
+            and all(n == slot_rows for n in metadata.per_rank_actual_token)
+        ):
+            packed = compressor.project_fused(x)
+            if comm.fits(packed, rows=slot_rows):
+                pending = comm.start_gather(packed, rows=slot_rows)
+
+                def finish_rank_major():
+                    (gathered,) = pending.finish_parts()
+                    return gathered.unflatten(0, (comm.world_size, slot_rows)).split(
+                        width, dim=-1
+                    )
+
+                return finish_rank_major
+
+    projected = compressor.project(x)
+    parts = [value for value in projected if value is not None]
+    total = int(metadata.total_seq_lens)
     finish = (
         _start_interleave_gather(plan, parts, forward_batch)
         if plan is not None

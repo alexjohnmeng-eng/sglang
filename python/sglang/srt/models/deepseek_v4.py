@@ -2025,7 +2025,17 @@ class MQALayer(MqaAttentionBase):
             and not _low_ratio_sources_break(attn_backend, forward_batch)
         ):
             finish_projected = start_cp_compressor_gather(
-                compressor=self.compressor, x=x, forward_batch=forward_batch
+                compressor=self.compressor,
+                x=x,
+                forward_batch=forward_batch,
+                rank_major=(
+                    self.compressor.use_fused_gate
+                    and attn_backend.cp_compressor_projects_local_rows
+                    and attn_backend.forward_metadata.late_layer_tail is None
+                    and forward_batch.batch_size == 1
+                    and x.shape[0] == 8192
+                    and int(forward_batch.attn_cp_metadata.total_seq_lens) == 65536
+                ),
             )
         return finish_kv, finish_projected
 

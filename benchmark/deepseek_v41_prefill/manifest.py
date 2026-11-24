@@ -30,6 +30,7 @@ def source_manifest(root, revision):
 
 
 def runtime_manifest():
+    import deep_gemm
     import humming
     import sgl_fa3
     import sgl_kernel
@@ -41,7 +42,7 @@ def runtime_manifest():
         "sglang-kernel": "0.4.11",
         "sgl-fa3": "0.1.0",
         "sgl-deep-gemm": "0.2.3.post2",
-        "flashinfer-python": "0.7.2",
+        "flashinfer-python": "0.7.5.post1",
         "transformers": "5.19.0",
         "triton": "3.8.0",
         "tilelang": "0.1.12",
@@ -64,6 +65,12 @@ def runtime_manifest():
     }
     if mismatches:
         raise RuntimeError(f"Serving dependency drift: {json.dumps(result, indent=2)}")
+    result["modules"]["deep_gemm"] = deep_gemm.__file__
+    if os.environ.get("SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM") == "1":
+        import deep_gemm_mega
+
+        result["modules"]["deep_gemm_mega"] = deep_gemm_mega.__file__
+        result["versions"]["deepgemm_megamoe"] = importlib.metadata.version("deep_gemm")
     return result
 
 
