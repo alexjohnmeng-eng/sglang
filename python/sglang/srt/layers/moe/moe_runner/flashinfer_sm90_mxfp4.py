@@ -230,6 +230,14 @@ def run_global_ids(
         capacity = max(capacity, num_tokens)
     if capacity <= 0:
         raise ValueError("SM90 MegaMoE needs positive token capacity")
+    if (
+        tune_prefill
+        and _use_deepgemm()
+        and envs.SGLANG_OPT_DSV41_SM90_MEGAMOE_16K_PREFILL.get()
+        and num_tokens == 16384
+        and parallel.attn_cp_size == parallel.moe_ep_size == 8
+    ):
+        capacity = max(capacity, num_tokens)
     buffer = _get_buffer(capacity, total_experts)
     from sglang.kernels.ops.quantization.fp8_kernel import (
         sglang_per_token_group_quant_fp8,

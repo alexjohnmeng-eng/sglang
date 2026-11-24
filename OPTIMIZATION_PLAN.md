@@ -762,3 +762,36 @@ The run directories `deepgemm473-c2/` and `deepgemm473-c2-repeat/` under
 all-rank profiles, evaluation reviews and long-prompt probes. The
 `upstream-20261125/` subdirectory contains the source revision, isolated
 wheel, build log, isolation diff, and reference and schedule benchmarks.
+
+### 128K chunks with a single split-M launch
+
+DeepGEMM sizes the larger symmetric buffer only for the CP8/EP8 long
+prefill call. Enable it with `SGLANG_OPT_DSV41_SM90_MEGAMOE_16K_PREFILL=1`
+and the isolated wheel that computes split-M shared memory from the final
+L2 staging layout. The short-batch pool uses 8192 rows. A 16384-row local
+router and rank-major C2 projection use the same CP interleave order.
+
+| Run | 64K input tok/s | 256K input tok/s | GSM8K |
+| --- | ---: | ---: | ---: |
+| 64K chunks | 97,872.18 | 94,307.43 | 1,282/1,319 |
+| 128K chunks with two 8192-row MoE calls | 97,680.96 | 94,874.17 | 1,283/1,319 |
+| 128K chunks with one 16384-row MoE call | 97,831.76 | 95,434.54 | 1,281/1,319 |
+| 128K chunks with the explicit switch | 97,736.89 | 95,428.42 | 1,278/1,319 |
+
+The 256K repeat is 1.19% above the 64K chunk baseline and 0.58% above the
+split-call control. All four GSM8K runs completed with zero request errors
+and the same prompt and target hash. The two single-launch runs generated
+the same next token as the split-call control for both 256K probes. The
+first run differed on one 64K probe and the repeat matched all four
+controls. GSM8K measures the shorter serving path. The 256K probes and
+three bitwise MoE comparisons on captured routes cover the larger launch.
+
+For the 256K profile, the single-launch candidate reduced MegaMoE from 100
+to 60 calls per rank and 1052.447 to 1034.737 ms/rank relative to the
+split-call control. The mean GPU span decreased from 2720.721 to
+2705.390 ms. The CP-local routing tests passed with 120 subtests.
+
+The reproduction command is in `benchmark/deepseek_v41_prefill/README.md`.
+The run directories `deepgemm473-chunk128-full-v2/` and
+`deepgemm473-chunk128-full-repeat/` contain raw samples, all-rank traces and
+GSM8K reviews under the experiment root.

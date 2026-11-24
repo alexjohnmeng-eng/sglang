@@ -2033,8 +2033,9 @@ class MQALayer(MqaAttentionBase):
                     and attn_backend.cp_compressor_projects_local_rows
                     and attn_backend.forward_metadata.late_layer_tail is None
                     and forward_batch.batch_size == 1
-                    and x.shape[0] == 8192
-                    and int(forward_batch.attn_cp_metadata.total_seq_lens) == 65536
+                    and x.shape[0] in (8192, 16384)
+                    and int(forward_batch.attn_cp_metadata.total_seq_lens)
+                    == 8 * x.shape[0]
                 ),
             )
         return finish_kv, finish_projected

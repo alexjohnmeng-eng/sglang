@@ -89,6 +89,7 @@ experiment_args=()
 if [[ -n "${PREFILL_DEEPGEMM473_SITE:-}" ]]; then
   experiment_args+=(
     -e SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM=1
+    -e "SGLANG_OPT_DSV41_SM90_MEGAMOE_16K_PREFILL=${PREFILL_DEEPGEMM473_16K:-0}"
     -v "$PREFILL_DEEPGEMM473_SITE:/repro/deepgemm473:ro"
   )
 fi

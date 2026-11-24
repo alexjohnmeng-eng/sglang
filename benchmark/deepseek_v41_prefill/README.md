@@ -118,6 +118,39 @@ GSM8K 使用 EvalScope 1.15.0 默认的 4-shot prompt，评测 test split 全部
 将这三类 kernel 计入 `Other`，分析分片时可在原始 trace 中按名称查看。
 [优化记录](../../OPTIMIZATION_PLAN.md#2026-11-24-cp8-prefill-w2-output-sharding-and-fp8-transport)
 
+## CP8/EP8 的 128K chunk
+
+用 128K chunk 测 256K 时，服务处理两个 131072-token chunk。每个大块
+有 16384 个 CP-local 行，调用一次 DeepGEMM MegaMoE。64K 和短批保留
+原有的 8192 行工作区，包括 DSPARK 验证图捕获。
+
+本地复现使用 DeepGEMM #473 的隔离 wheel
+`8cad9399351e58d070c90546ad98b44900523cfdac8839ed02375ed64e9fb081`。
+wheel 与构建记录在实验目录的 `upstream-20261125/`。安装目录保留 wheel 的
+`.dist-info`，模块目录命名为 `deep_gemm_mega`，以便和镜像的 dense
+`deep_gemm` 同时加载。
+
+`PREFILL_DEEPGEMM473_16K=1` 将
+`SGLANG_OPT_DSV41_SM90_MEGAMOE_16K_PREFILL=1` 传给服务。默认值为 0，
+适用于原版 DeepGEMM #473 的 8192 行工作区。
+
+```bash
+runtime=/data1/fjmeng2/dsv41-runtime
+results="$runtime/repro/prefill-110k-20261124"
+repo="$runtime/worktrees/prefill-deepgemm473-chunk128-full"
+PREFILL_EXPERIMENT_REPO="$repo" \
+PREFILL_REVISION="$(git -C "$repo" rev-parse HEAD)" \
+PREFILL_RUN_NAME=deepgemm473-chunk128-repro \
+PREFILL_CHUNK_SIZE=131072 \
+PREFILL_DEEPGEMM473_16K=1 \
+PREFILL_DEEPGEMM473_SITE="$results/upstream-20261125/deepgemm-473-prefill-tuning-site" \
+bash "$results/run_deepgemm473_serving.sh"
+```
+
+脚本使用 8×H20、TP8/CP8 interleave/EP8 与 `per_rank` host Engram，
+关闭 radix cache，先测 64K 和 256K 并采集八卡 GPU-only trace，再用同一
+实例跑全量 GSM8K。
+
 ## 镜像与源码
 
 验证镜像的不可变 image ID：
