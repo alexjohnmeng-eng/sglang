@@ -302,6 +302,7 @@ def reduce_scatter_with_shared(
     shared: Optional[List[torch.Tensor]],
     rows: int,
     deferred: Optional["HummingDeferredMulSum"] = None,
+    local_shared: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """This rank's ``rows`` rows of the TP sum of ``routed + shared`` ([W * rows,
     hidden] partials on every rank): the MoE's ``routed += shared`` (one bf16
@@ -318,17 +319,23 @@ def reduce_scatter_with_shared(
 
         if deferred.pair_w2_used:
             assert shared is None
-            return comm.reduce_scatter_pair_w2(rows, write_all)
-        return comm.reduce_scatter(rows, write_all=write_all)
+            return comm.reduce_scatter_pair_w2(
+                rows, write_all, local_shared=local_shared
+            )
+        value = comm.reduce_scatter(rows, write_all=write_all)
+    else:
 
-    def write_rows(p: int, out: torch.Tensor) -> None:
-        partial = routed[p * rows : (p + 1) * rows]
-        if shared is None:
-            out.copy_(partial)
-        else:
-            torch.add(partial, shared[p], out=out)
+        def write_rows(p: int, out: torch.Tensor) -> None:
+            partial = routed[p * rows : (p + 1) * rows]
+            if shared is None:
+                out.copy_(partial)
+            else:
+                torch.add(partial, shared[p], out=out)
 
-    return comm.reduce_scatter(rows, write_rows)
+        value = comm.reduce_scatter(rows, write_rows)
+    if local_shared is not None:
+        value.add_(local_shared)
+    return value
 
 
 def _fp8_gather_cols(hidden: int) -> int:
@@ -558,11 +565,9 @@ class CpMoeSymmTransport(ComputeTransport):
             shared=self._shared,
             rows=self.source_rows,
             deferred=self._deferred,
+            local_shared=self._local_shared,
         )
-        if self._local_shared is not None:
-            value.add_(self._local_shared)
-            self._local_shared = None
-        self._shared = self._deferred = None
+        self._local_shared = self._shared = self._deferred = None
         return value
 
     def release(self):

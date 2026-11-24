@@ -426,7 +426,9 @@ class CpPrefillSymm:
         self._pair_w2_handle.barrier(channel=1)
         return local, scale
 
-    def reduce_scatter_pair_w2(self, rows: int, write_all) -> torch.Tensor:
+    def reduce_scatter_pair_w2(
+        self, rows: int, write_all, *, local_shared: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         from sglang.kernels.ops.moe.dsv41_pair_w2 import sum_colored_slots
 
         assert self._reduce_bufs is not None and self.world_size == 8
@@ -435,7 +437,9 @@ class CpPrefillSymm:
         own = slice(self.rank * rows, (self.rank + 1) * rows)
         write_all([peer.view(-1, half_width)[own] for peer in self._reduce_bufs])
         self._handle.barrier(channel=_REDUCE_CHANNEL)
-        return sum_colored_slots(self._reduce_bufs[self.rank], rows, self.width)
+        return sum_colored_slots(
+            self._reduce_bufs[self.rank], rows, self.width, shared=local_shared
+        )
 
     def reduce_scatter(
         self,

@@ -686,3 +686,27 @@ The original report, exhaustive GSM8K reviews, and eight traces per length are
 under `/data1/fjmeng2/dsv41-runtime/repro/prefill-plus20-20261124/q8-w2-pair-fp8-64/`.
 The integrated branch report is
 `/data1/fjmeng2/dsv41-runtime/repro/perf-dsv41-h20-integration-20261124/validation_summary.json`.
+
+## 2026-11-24 CP8 paired W2 output and shared expert fusion
+
+In the paired W2 path, the slot assembly kernel adds the local shared-expert
+output after rounding the routed sum to BF16. The serving configuration uses
+the paired W2 reproduction command above.
+
+| Run | 64K input tok/s | 256K input tok/s | Full GSM8K |
+| --- | ---: | ---: | ---: |
+| Baseline | 91,827.37 | 88,414.43 | 1,281/1,319 |
+| Fused shared add | 91,968.54 | 88,614.60 | 1,279/1,319 |
+| Fused shared add repeat | 92,045.50 | 88,679.98 | 1,282/1,319 |
+
+Both candidate runs used the same 64K chunk configuration and identical input
+and GSM8K prompt hashes. Each full GSM8K run completed with zero request errors.
+The first eight-rank profile shows 20 fewer launches per rank at 64K and 80
+fewer at 256K, with about 1.04 ms and 4.19 ms saved in the assembly and add.
+The isolated 8,192-row check matched the separate-add output and took 0.1994 ms
+versus 0.2539 ms.
+
+The original capture and repeat are in `w2-shared-add-serving/` and
+`w2-shared-add-repeat/` under
+`/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-20261124/`. The same directory
+contains the isolated kernel test and `run_w2_shared_add.sh`.
