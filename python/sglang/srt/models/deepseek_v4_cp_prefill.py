@@ -535,7 +535,9 @@ class CpMoeSymmTransport(ComputeTransport):
             weights = topk.topk_weights
             if not mlp.routed_scaling_factor_fused_in_topk:
                 weights = weights * mlp.routed_scaling_factor
-            return run_global_ids(mlp.experts, self.input, weights, topk.topk_ids)
+            return run_global_ids(
+                mlp.experts, self.input, weights, topk.topk_ids, tune_prefill=True
+            )
 
         # The MoE's own deferral is for the shared add it skips here, so the
         # humming run sees this context, also through mlp().

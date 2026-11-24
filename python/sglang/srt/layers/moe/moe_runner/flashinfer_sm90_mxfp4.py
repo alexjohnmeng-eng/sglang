@@ -8,6 +8,7 @@ the conversion can be validated without changing the online Humming runner.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import Optional
 
 import torch
@@ -181,6 +182,8 @@ def run_global_ids(
     hidden_states: torch.Tensor,
     topk_weights: torch.Tensor,
     topk_ids: torch.Tensor,
+    *,
+    tune_prefill: bool = False,
 ) -> torch.Tensor:
     """Dispatch CP-local rows whose expert IDs are physical global IDs."""
     if not run_enabled():
@@ -209,7 +212,7 @@ def run_global_ids(
     if capacity <= 0:
         raise ValueError("SM90 MegaMoE needs positive token capacity")
     buffer = _get_buffer(capacity, total_experts)
-    from flashinfer.megamoe import mxfp4_mega_moe
+    from flashinfer import megamoe
     from sglang.kernels.ops.quantization.fp8_kernel import (
         sglang_per_token_group_quant_fp8,
     )
@@ -217,11 +220,46 @@ def run_global_ids(
     output = torch.empty_like(hidden_states)
     ids = topk_ids.to(torch.int64)
     route_weights = topk_weights.float().contiguous()
+    if (
+        tune_prefill
+        and num_tokens == capacity == 8192
+        and total_experts == 448
+        and parallel.attn_cp_size == parallel.moe_ep_size == 8
+        and buffer.num_sms == 78
+    ):
+        plan = megamoe.select_mxfp4_fused_plan(
+            buffer.num_sms,
+            parallel.moe_ep_size,
+            total_experts,
+            buffer.num_topk,
+            buffer.hidden,
+            buffer.intermediate_hidden,
+            capacity,
+            num_tokens,
+        )
+        sglang_per_token_group_quant_fp8(
+            hidden_states, 128, output_q=buffer.x, output_s=buffer.x_sf
+        )
+        buffer.topk_idx.copy_(ids)
+        buffer.topk_weights.copy_(route_weights)
+        buffer.commit_staged(num_tokens)
+        return megamoe._run_kernel(
+            megamoe.gen_megamoe_sm90_mxfp4_module,
+            "megamoe_sm90_mxfp4_fused",
+            replace(plan, num_stages=4),
+            output,
+            *weights,
+            buffer,
+            num_tokens,
+            None,
+            None,
+            None,
+        )
     for offset in range(0, num_tokens, capacity):
         part = slice(offset, min(offset + capacity, num_tokens))
         x_fp8, x_sf = sglang_per_token_group_quant_fp8(hidden_states[part], 128)
         buffer.stage(x_fp8, x_sf, ids[part].contiguous(), route_weights[part])
-        mxfp4_mega_moe(
+        megamoe.mxfp4_mega_moe(
             output[part],
             weights[0],
             weights[1],
