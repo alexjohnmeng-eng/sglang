@@ -74,6 +74,7 @@ _LOCAL_ROUTER_ROWS = {
     (2048, 4): 2048,
     (2048, 8): 2048,
     (4096, 4): 4096,
+    (8192, 8): 8192,
 }
 _LOCAL_ROUTER_DEVICES = ("NVIDIA H20", "NVIDIA H20-3e")
 # int32 side-payload columns behind the top-k for the fp8 gather's humming scales
