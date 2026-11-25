@@ -6,13 +6,19 @@ tools=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo=$(git -C "$tools" rev-parse --show-toplevel)
 runtime=${PREFILL_RUNTIME_DIR:-/data1/fjmeng2/dsv41-runtime}
 previous=$runtime/repro/prefill-110k-20261124
-dense=$runtime/repro/prefill-110k-local-20261125/wqb-q8-rope
+experiments=$runtime/repro/prefill-110k-local-20261125
+dense=$experiments/wqb-q8-rope
 chunk=${1:-262144}
 case "$chunk" in
   65536) export PREFILL_DEEPGEMM473_16K=0 ;;
   131072|262144) export PREFILL_DEEPGEMM473_16K=1 ;;
   *) echo "Usage: $0 [65536|131072|262144]" >&2; exit 2 ;;
 esac
+
+if [[ ${PREFILL_DENSE_MULTICAST:-0} == 1 ]]; then
+  dense=$experiments/dense-multicast
+  export PREFILL_DEEPGEMM521_SITE="${PREFILL_DEEPGEMM521_SITE:-$experiments/mega-mhc-521/site}"
+fi
 
 run_id=$(date -u +%Y%m%dT%H%M%SZ)
 export PREFILL_OUTPUT="${PREFILL_OUTPUT:-$runtime/repro/cp8-megamoe-$chunk-$run_id}"

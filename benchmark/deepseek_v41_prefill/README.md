@@ -250,6 +250,36 @@ PREFILL_DEEPGEMM521_SITE="$experiment/site" \
 提示在多次运行中出现不同的下一 token。
 原始报告、模型长提示探针及 wheel 构建材料见上文的实验目录。
 
+## SM90 密集投影 TMA multicast
+
+`PREFILL_DENSE_MULTICAST=1` 选择已验证的密集投影 DeepGEMM
+扩展，同时挂载 Mega mHC 扩展。对于 H20 的 block32 GEMM，
+`wo_b` 在 8192 和 32768 个本地行使用激活 multicast，
+融合 RoPE/Q8 的 `wq_b` 在 32768 行使用权重 multicast。
+两组目标形状的算子对照均逐位一致。
+
+```bash
+PREFILL_DENSE_MULTICAST=1 bash benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh 262144
+```
+
+| 256K chunk 测试 | 64K tok/s | 256K tok/s | GSM8K |
+| --- | ---: | ---: | ---: |
+| Mega mHC 对照复测 | 99599.02 | 97296.19 | 1278/1319 |
+| Dense multicast | 99779.12 | 97470.84 | 1282/1319 |
+| Dense multicast 复测 | 99797.03 | 97462.70 | 1280/1319 |
+
+两次候选都完成了全量 GSM8K，零请求错误，提示和目标哈希与对照一致。
+两次的四组长提示下一 token 相同。64K 八卡 profile 的 `wo_b`
+每 rank 20 次均使用 cluster 2，累计时间由 50.236 ms 降到 49.549 ms。
+256K 的 `wo_b` 和 Q8 `wq_b` 每 rank 各 20 次均使用 cluster 2，
+累计时间由 199.135 ms 和 221.744 ms 降到 196.411 ms 和 220.784 ms。
+
+扩展源代码、`build.sh` 和两次评测在
+`/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/dense-multicast/`。
+可在宿主机运行该目录的 `build.sh` 构建 `site/deep_gemm/_C.so`。实测二进制的
+SHA256 为 `a225af5048055b3c7acdbee8df19fbab8abb5f83cfa35fff850b176746432a70`。
+吞吐、精度、长提示和八卡 profile 明细在 `serving-v2/` 与 `serving-v2-repeat/`。
+
 ## 镜像与源码
 
 验证镜像的不可变 image ID：
