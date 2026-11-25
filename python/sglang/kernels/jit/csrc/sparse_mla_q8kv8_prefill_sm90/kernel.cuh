@@ -177,6 +177,9 @@ struct SparseMlaQ8Kv8PrefillKernel {
 
   struct TmaParams_t {
     CUtensorMap tensor_map_O;
+#ifdef SGL_EXPERIMENT_Q8_PREFILL_TMA_SWA
+    CUtensorMap tensor_map_KV;
+#endif
   };
 
   // ========================================================================
@@ -201,6 +204,9 @@ struct SparseMlaQ8Kv8PrefillKernel {
 
     if (warp_idx == 0 && elect_one_sync()) {
       cute::prefetch_tma_descriptor(&tma_params.tensor_map_O);
+#ifdef SGL_EXPERIMENT_Q8_PREFILL_TMA_SWA
+      cute::prefetch_tma_descriptor(&tma_params.tensor_map_KV);
+#endif
 
       plan.bar_q.init(1);
       plan.bar_k0_free.init(128);
@@ -913,6 +919,48 @@ struct SparseMlaQ8Kv8PrefillKernel {
           plan.bar_is_kv_valid_ready[(block_idx >> 1) & 1].arrive();  // index by iter parity
         }
 
+#ifdef SGL_EXPERIMENT_Q8_PREFILL_TMA_SWA
+        // Both SWA blocks can use TMA when every source row is consecutive. The
+        // producer's named barrier combines the per-lane predicates.
+        bool use_tma_swa = false;
+        int first_swa_row = 0;
+        if (block_idx * B_TOPK + 2 * B_TOPK == topk_length) {
+          first_swa_row = __ldg(gIndices + block_idx * B_TOPK);
+          const int index = __ldg(gIndices + block_idx * B_TOPK + idx_in_warpgroup);
+          const bool valid = first_swa_row >= 0 && first_swa_row <= params.s_kv - 2 * B_TOPK &&
+                             index == first_swa_row + idx_in_warpgroup;
+          int all_valid;
+          asm volatile(
+              "{ .reg .pred p, q; setp.ne.u32 p, %1, 0; "
+              "bar.red.and.pred q, 7, 128, p; selp.u32 %0, 1, 0, q; }"
+              : "=r"(all_valid)
+              : "r"(static_cast<int>(valid))
+              : "memory");
+          use_tma_swa = all_valid != 0;
+        }
+        if (use_tma_swa) {
+          auto tma_half = [&](int buf_idx, int begin, int end, transac_bar_t& barrier) {
+            if (idx_in_warpgroup == 0) {
+              barrier.arrive_and_expect_tx((end - begin) * B_TOPK * 64);
+              for (int tile = begin; tile < end; ++tile) {
+                cute::SM90_TMA_LOAD_2D::copy(
+                    &tma_params.tensor_map_KV,
+                    reinterpret_cast<uint64_t*>(&barrier),
+                    static_cast<uint64_t>(cute::TMA::CacheHintSm90::EVICT_NORMAL),
+                    plan.k[buf_idx].data() + tile * B_TOPK * 64, tile * 64, first_swa_row + buf_idx * B_TOPK);
+              }
+            } else {
+              barrier.arrive();
+            }
+          };
+          tma_half(0, 0, 4, plan.bar_k0_ready[0]);
+          tma_half(1, 4, D_K / 64, plan.bar_k1_ready[1]);
+          tma_half(0, 4, D_K / 64, plan.bar_k0_ready[1]);
+          tma_half(1, 0, 4, plan.bar_k1_ready[0]);
+          plan.bar_k0_ready[0].wait(cur_bar_wait_phase_prod ^ 1);
+        } else
+#endif
+        {
         copy_tiles(0, 0, 0, 4);
         commit_to_mbar(plan.bar_k0_ready[0]);
         asm volatile("cp.async.commit_group;\n" ::);
@@ -933,6 +981,7 @@ struct SparseMlaQ8Kv8PrefillKernel {
         // wait_group 0 re-times the producer into a latent cross-iteration
         // race; the consumer must overlap the in-flight K[1] load here.
         asm volatile("cp.async.wait_group 1;\n" ::);
+        }
         // fence.proxy.async: make cp.async data visible through generic proxy
         // (required for LDSM reads in V transpose; cp.async uses async proxy)
         fence_view_async_shared();
@@ -969,7 +1018,16 @@ struct SparseMlaQ8Kv8PrefillKernel {
         // V[0]-LEFT transpose still overlaps with group-1 async copies.
 
         // Wait for all groups before V[1]-LEFT transpose
-        asm volatile("cp.async.wait_group 0;\n" ::);
+#ifdef SGL_EXPERIMENT_Q8_PREFILL_TMA_SWA
+        if (use_tma_swa) {
+          plan.bar_k1_ready[1].wait(cur_bar_wait_phase_prod ^ 1);
+          plan.bar_k0_ready[1].wait(cur_bar_wait_phase_prod ^ 1);
+          plan.bar_k1_ready[0].wait(cur_bar_wait_phase_prod ^ 1);
+        } else
+#endif
+        {
+          asm volatile("cp.async.wait_group 0;\n" ::);
+        }
         // fence.proxy.async: make cp.async group-1 data visible through
         // generic proxy for LDSM reads in V transpose
         fence_view_async_shared();
@@ -1040,7 +1098,30 @@ struct SparseMlaQ8Kv8PrefillKernel {
       KU_ASSERT(res == CUresult::CUDA_SUCCESS);
     }
 
+#ifdef SGL_EXPERIMENT_Q8_PREFILL_TMA_SWA
+    CUtensorMap tensor_map_KV;
+    uint64_t kv_size[2] = {D_K, static_cast<uint64_t>(params.s_kv)};
+    uint64_t kv_stride[1] = {static_cast<uint64_t>(params.stride_kv_s_kv)};
+    uint32_t kv_box[2] = {64, B_TOPK};
+    uint32_t kv_elem_stride[2] = {1, 1};
+    CUresult kv_res = CUTLASS_CUDA_DRIVER_WRAPPER_CALL(cuTensorMapEncodeTiled)(
+        &tensor_map_KV,
+        CUtensorMapDataType::CU_TENSOR_MAP_DATA_TYPE_UINT8,
+        2,
+        const_cast<void*>(static_cast<const void*>(params.kv)),
+        kv_size,
+        kv_stride,
+        kv_box,
+        kv_elem_stride,
+        CUtensorMapInterleave::CU_TENSOR_MAP_INTERLEAVE_NONE,
+        CUtensorMapSwizzle::CU_TENSOR_MAP_SWIZZLE_64B,
+        CUtensorMapL2promotion::CU_TENSOR_MAP_L2_PROMOTION_NONE,
+        CUtensorMapFloatOOBfill::CU_TENSOR_MAP_FLOAT_OOB_FILL_NONE);
+    KU_ASSERT(kv_res == CUDA_SUCCESS);
+    TmaParams_t tma_p = {tensor_map_O, tensor_map_KV};
+#else
     TmaParams_t tma_p = {tensor_map_O};
+#endif
 
     auto kernel = &sparse_mla_q8kv8_prefill_kernel<
         SparseMlaQ8Kv8PrefillKernel<D_QK, HAVE_TOPK_LENGTH, HAVE_ATTN_SINK>,

@@ -85,7 +85,7 @@ device_args=()
 if [[ -d /dev/infiniband ]]; then
   device_args+=(--device /dev/infiniband:/dev/infiniband)
 fi
-experiment_args=()
+experiment_args=(-e "SGLANG_EXPERIMENT_DSV41_Q8_TMA_SWA=${PREFILL_Q8_TMA_SWA:-0}")
 if [[ -n "${PREFILL_DEEPGEMM473_SITE:-}" ]]; then
   experiment_args+=(
     -e SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM=1
