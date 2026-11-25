@@ -32,6 +32,7 @@ from sglang.kernels.ops.attention.dsv4 import (
     fused_q_norm_rope,
     fused_rope_inplace,
 )
+from sglang.kernels.ops.attention.dsv4.kv_layout import KVLayout
 from sglang.kernels.ops.attention.dsv4.wo_a import MAX_M as _FUSED_WO_A_MAX_TOKENS
 from sglang.kernels.ops.attention.dsv4.wo_a import (
     can_use_fused_wo_a,
@@ -2051,12 +2052,27 @@ class MQALayer(MqaAttentionBase):
 
     def _start_cp_prefill_gathers(
         self, *, x, x_linear, qkv_a, forward_batch, attn_backend
-    ) -> Tuple[Optional[Callable], Optional[Callable]]:
+    ) -> Tuple[Optional[Callable], Optional[Callable], int]:
         """Start the CP gathers of this rank's SWA KV and low-ratio compressor
-        projections; each returned call finishes one, None keeps its NCCL path."""
-        finish_kv = start_cp_kv_gather(
-            kv=self._cp_local_kv(x_linear, qkv_a), forward_batch=forward_batch
-        )
+        projections. Return the shard size for a KV gather kept in rank order."""
+        kv = self._cp_local_kv(x_linear, qkv_a)
+        finish_kv = None
+        cp_shard_rows = 0
+        if (
+            self.is_dsv41
+            and get_platform().is_sm90
+            and get_parallel().attn_cp_size == 8
+            and kv.shape[0] >= 2048
+            and not get_token_to_kv_pool().uniform_fp8
+            and get_token_to_kv_pool().get_swa_key_layout() is KVLayout.V4
+        ):
+            finish_kv = start_cp_kv_gather(
+                kv=kv, forward_batch=forward_batch, rank_major_cp8=True
+            )
+            if finish_kv is not None:
+                cp_shard_rows = int(forward_batch.attn_cp_metadata.total_seq_lens) // 8
+        if finish_kv is None:
+            finish_kv = start_cp_kv_gather(kv=kv, forward_batch=forward_batch)
         finish_projected = None
         if (
             self.compress_ratio in (1, 2)
@@ -2077,7 +2093,7 @@ class MQALayer(MqaAttentionBase):
                     == 8 * x.shape[0]
                 ),
             )
-        return finish_kv, finish_projected
+        return finish_kv, finish_projected, cp_shard_rows
 
     def _compute_kv_bf16(
         self,
@@ -2512,6 +2528,7 @@ class MQALayer(MqaAttentionBase):
         use_cp = is_cp_active(forward_batch)
         kv: Optional[torch.Tensor]
         finish_cp_kv = finish_cp_projected = None
+        cp_shard_rows = 0
 
         from sglang.srt.layers.attention.dsv4.unified_kv_gate import (
             is_unified_kv_fp8,
@@ -2738,12 +2755,14 @@ class MQALayer(MqaAttentionBase):
         else:
             if use_cp and self.cp_prefill_symm and not defer_cp_attention:
                 # Started before q_b, which hides the transfers; finished below.
-                finish_cp_kv, finish_cp_projected = self._start_cp_prefill_gathers(
-                    x=x,
-                    x_linear=x_linear,
-                    qkv_a=qkv_a,
-                    forward_batch=forward_batch,
-                    attn_backend=attn_backend,
+                finish_cp_kv, finish_cp_projected, cp_shard_rows = (
+                    self._start_cp_prefill_gathers(
+                        x=x,
+                        x_linear=x_linear,
+                        qkv_a=qkv_a,
+                        forward_batch=forward_batch,
+                        attn_backend=attn_backend,
+                    )
                 )
             q_lora, q_for_wqb = self._normalize_q_lora(q_lora)
             if _is_hip:
@@ -2825,6 +2844,7 @@ class MQALayer(MqaAttentionBase):
                     eps=self.eps,
                     freqs_cis=self.freqs_cis,
                     positions=global_positions,
+                    cp_shard_rows=cp_shard_rows,
                 )
                 kv = None
             elif in_replay_tail_graph():

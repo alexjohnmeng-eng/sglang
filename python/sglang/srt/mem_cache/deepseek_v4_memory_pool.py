@@ -2395,6 +2395,8 @@ class DeepSeekV4TokenToKVPool(BaseSWAKVPool):
         freqs_cis: torch.Tensor,
         positions: torch.Tensor,
         q: Optional[torch.Tensor] = None,
+        *,
+        cp_shard_rows: int = 0,
     ) -> None:
         """q ([B, H, head_dim]): rope its query heads in the same launch."""
         if self.uniform_fp8:
@@ -2420,6 +2422,7 @@ class DeepSeekV4TokenToKVPool(BaseSWAKVPool):
             page_size=self.swa_page_size,
             layout=self.kv_layout,
             q=q,
+            cp_shard_rows=cp_shard_rows,
         )
 
     def set_unified_key_buffer_radix_fused_norm_rope(

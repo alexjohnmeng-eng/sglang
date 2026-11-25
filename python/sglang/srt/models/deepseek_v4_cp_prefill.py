@@ -134,11 +134,10 @@ def _start_interleave_gather(
 
 
 def start_cp_kv_gather(
-    *, kv: torch.Tensor, forward_batch
+    *, kv: torch.Tensor, forward_batch, rank_major_cp8: bool = False
 ) -> Optional[Callable[[], torch.Tensor]]:
     """Start the CP all-gather of this rank's SWA KV rows on the copy engines; the
-    returned call finishes it, bitwise cp_materialize_global_token_order. None:
-    take that path instead."""
+    returned call finishes it in global order or in equal CP8 rank-major slots."""
     plan = _interleave_plan(
         local_rows=kv.shape[0],
         forward_batch=forward_batch,
@@ -147,6 +146,19 @@ def start_cp_kv_gather(
     )
     if plan is None:
         return None
+    if rank_major_cp8:
+        comm, send_rows, slot_rows = plan
+        meta = forward_batch.attn_cp_metadata
+        if not (
+            comm.world_size == 8
+            and meta.gather_index is None
+            and int(meta.total_seq_lens) == 8 * slot_rows
+            and all(n == slot_rows for n in meta.per_rank_actual_token)
+            and meta.per_rank_logical_token in (None, meta.per_rank_actual_token)
+            and comm.fits(kv[:send_rows], rows=slot_rows)
+        ):
+            return None
+        return comm.start_gather(kv[:send_rows], rows=slot_rows).finish
     finish = _start_interleave_gather(plan, [kv], forward_batch)
     return None if finish is None else lambda: finish()[0]
 

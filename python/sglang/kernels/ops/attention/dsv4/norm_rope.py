@@ -320,10 +320,14 @@ def fused_k_norm_rope_flashmla(
     page_size: int,
     layout: Union[KVLayout, str] = KVLayout.V4,
     q: Optional[torch.Tensor] = None,
+    *,
+    cp_shard_rows: int = 0,
 ) -> None:
     """RMSNorm + RoPE ``kv`` and write it into the ``layout`` paged FlashMLA
     cache at ``out_loc``."""
     layout = KVLayout.parse(layout)
+    if cp_shard_rows:
+        assert q is None and not (_is_hip or _is_xpu) and layout is KVLayout.V4
     freqs_real = torch.view_as_real(freqs_cis).flatten(-2)
     head_dim = kv.shape[-1]
     rope_dim = freqs_real.shape[-1]
@@ -344,4 +348,6 @@ def fused_k_norm_rope_flashmla(
         module = _jit_main_k_norm_rope_flashmla_module(
             kv.dtype, head_dim, rope_dim, page_size, layout
         )
-        module.forward(kv, kv_weight, freqs_real, positions, out_loc, kvcache, eps)
+        module.forward(
+            kv, kv_weight, freqs_real, positions, out_loc, kvcache, eps, cp_shard_rows
+        )
