@@ -29,6 +29,8 @@ def mhc_mega_boundary(
     y_fp8=None,
     y_gemm_sf=None,
     moe_input=None,
+    *,
+    sm90=False,
 ):
     """Update the residual, collapse with carried pre, and compute next stats.
 
@@ -50,7 +52,11 @@ def mhc_mega_boundary(
     if moe_input is not None:
         assert y_fp8 is None
         y_fp8, y_routed_sf, y_shared_sf, shared_sf_block_m = moe_input
-    deep_gemm.mega_mhc(
+    if sm90:
+        from deep_gemm_mhc import mega_mhc
+    else:
+        mega_mhc = deep_gemm.mega_mhc
+    mega_mhc(
         x=x,
         residual=residual,
         shifted_prev_mix=pre.unsqueeze(-1),

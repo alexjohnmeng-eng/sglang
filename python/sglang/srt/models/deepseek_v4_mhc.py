@@ -802,6 +802,33 @@ def _can_use_mega_mhc(cfg: HcConfig) -> bool:
     )
 
 
+def _can_use_sm90_mega_mhc(
+    cfg: HcConfig,
+    y: torch.Tensor,
+    residual: torch.Tensor,
+    coefficients: HcTriplet,
+    next: HcNextBoundary,
+) -> bool:
+    return (
+        envs.SGLANG_OPT_DSV41_MEGA_MHC_PREFILL.get()
+        and cfg.sm90 is not None
+        and cfg.cp_prefill
+        and cfg.pre_from_prev
+        and cfg.mult == 4
+        and cfg.hidden == 5120
+        and get_parallel().attn_cp_size == 8
+        and next.extend
+        and next.norm_fusable
+        and next.hc is not None
+        and 2048 <= y.shape[0] <= 32768
+        and y.dtype == residual.dtype == torch.bfloat16
+        and y.is_contiguous()
+        and residual.is_contiguous()
+        and all(c.is_contiguous() for c in coefficients)
+        and not is_batch_invariant_mode_enabled()
+    )
+
+
 def _can_use_decode_post_combine(cfg: HcConfig, rows: int) -> bool:
     return (
         0 < rows <= DECODE_POST_COMBINE_MAX_ROWS
@@ -826,7 +853,10 @@ def _post_fusion(
     combine computes itself."""
     cfg = hc.cfg
     pre, post_mix, comb = coefficients
-    if cfg.sm90 is not None and next is not None and y.shape[0] > 0:
+    sm90_mega = next is not None and _can_use_sm90_mega_mhc(
+        cfg, y, residual, coefficients, next
+    )
+    if not sm90_mega and cfg.sm90 is not None and next is not None and y.shape[0] > 0:
         fused = _post_fusion_sm90(cfg, y, residual, coefficients, next.norm)
         if fused is not None:
             return fused
@@ -835,18 +865,18 @@ def _post_fusion(
         and next.norm_fusable
         and next.hc is not None
         and next.extend
-        and _can_use_mega_mhc(cfg)
+        and (sm90_mega or _can_use_mega_mhc(cfg))
         and y.shape[0] > 0
     ):
         next_hc = next.hc
         y_fp8 = y_sf = moe_input = None
-        if next.accepts_mxfp8_deepgemm and fused_mxfp8_rows(y.shape[0]):
+        if not sm90_mega and next.accepts_mxfp8_deepgemm and fused_mxfp8_rows(y.shape[0]):
             y_fp8, y_sf = empty_deepgemm_mxfp8_pair(
                 *y.shape,
                 y.device,
                 flashinfer=deepgemm_pair_takes_flashinfer(),
             )
-        elif next.mega_moe_input is not None:
+        elif not sm90_mega and next.mega_moe_input is not None:
             moe_input = next.mega_moe_input(y)
         updated, normalized, stats = mhc_mega_boundary(
             y,
@@ -862,6 +892,7 @@ def _post_fusion(
             next_hc.cfg.eps,
             next_hc.norm.variance_epsilon,
             next_hc.cfg.sinkhorn_iters,
+            sm90=sm90_mega,
             y_fp8=y_fp8,
             y_gemm_sf=y_sf,
             moe_input=None if moe_input is None else moe_input.views(),

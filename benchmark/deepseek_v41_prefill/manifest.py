@@ -70,7 +70,12 @@ def runtime_manifest():
         import deep_gemm_mega
 
         result["modules"]["deep_gemm_mega"] = deep_gemm_mega.__file__
-        result["versions"]["deepgemm_megamoe"] = importlib.metadata.version("deep_gemm")
+        result["versions"]["deepgemm_megamoe"] = deep_gemm_mega.__version__
+    if os.environ.get("SGLANG_OPT_DSV41_MEGA_MHC_PREFILL") == "1":
+        import deep_gemm_mhc
+
+        result["modules"]["deep_gemm_mhc"] = deep_gemm_mhc.__file__
+        result["versions"]["deepgemm_mega_mhc"] = deep_gemm_mhc.__version__
     return result
 
 

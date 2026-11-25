@@ -12,6 +12,10 @@ if [[ "${SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM:-0}" == 1 ]]; then
   export PYTHONPATH="/repro/deepgemm473:$PYTHONPATH"
   export DG473_JIT_CACHE_DIR=/repro/cache/deepgemm473
 fi
+if [[ -d /repro/deepgemm521 ]]; then
+  export PYTHONPATH="/repro/deepgemm521:$PYTHONPATH"
+  export DG521_JIT_CACHE_DIR=/repro/cache/deepgemm521
+fi
 export SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN=1
 export SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS=8192
 export SGLANG_CACHE_DIR=/repro/cache

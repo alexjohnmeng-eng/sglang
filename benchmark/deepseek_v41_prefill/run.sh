@@ -93,6 +93,12 @@ if [[ -n "${PREFILL_DEEPGEMM473_SITE:-}" ]]; then
     -v "$PREFILL_DEEPGEMM473_SITE:/repro/deepgemm473:ro"
   )
 fi
+if [[ -n "${PREFILL_DEEPGEMM521_SITE:-}" ]]; then
+  experiment_args+=(
+    -e SGLANG_OPT_DSV41_MEGA_MHC_PREFILL=1
+    -v "$PREFILL_DEEPGEMM521_SITE:/repro/deepgemm521:ro"
+  )
+fi
 if [[ -n "${PREFILL_DENSE_DEEPGEMM_SITE:-}" ]]; then
   experiment_args+=(
     -v "$PREFILL_DENSE_DEEPGEMM_SITE:/repro/dense_deepgemm:ro"

@@ -221,6 +221,35 @@ bash benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh 262144
 `wqb-q8-rope/kv-repeat-1`、`rank-major-chunk-131072`、`rank-major-chunk-262144-v2`
 与 `rank-major-chunk-262144-repeat`。
 
+## CP8 SM90 Mega mHC
+
+DeepGEMM #521 的 Hopper 算子将 mHC post、使用上一子层 pre 系数的 collapse、
+RMSNorm 和下一子层的 mix/Sinkhorn 合并。CP8 eager prefill 的 2048 至 32768
+本地行可使用这条 BF16 输出路径。运行入口通过
+`PREFILL_DEEPGEMM521_SITE` 挂载隔离扩展并设置
+`SGLANG_OPT_DSV41_MEGA_MHC_PREFILL=1`。该目录包含
+`deep_gemm_mhc`，来源为 DeepGEMM `410ce17fb3cc`，JIT 缓存位于
+`/repro/cache/deepgemm521`。
+
+```bash
+runtime=/data1/fjmeng2/dsv41-runtime
+experiment=$runtime/repro/prefill-110k-local-20261125/mega-mhc-521
+PREFILL_DEEPGEMM521_SITE="$experiment/site" \
+  bash benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh 262144
+```
+
+| 256K chunk 测试 | 64K tok/s | 256K tok/s | GSM8K |
+| --- | ---: | ---: | ---: |
+| 首轮 | 99598.37 | 97350.52 | 1281/1319 |
+| 同源码复测 | 99599.02 | 97296.19 | 1278/1319 |
+
+两次全量评测的提示和答案哈希一致，请求错误均为零。64K 八卡平均 GPU span
+从 654.309 ms 降到 646.303 ms，每 rank 调用融合算子 38 次。
+算子对照的 BF16 归一化结果相对 L2 差异最高为 2.01×10⁻⁵。
+四组长提示中，三组的下一 token 与 256K chunk 对照一致，seed 43 的 256K
+提示在多次运行中出现不同的下一 token。
+原始报告、模型长提示探针及 wheel 构建材料见上文的实验目录。
+
 ## 镜像与源码
 
 验证镜像的不可变 image ID：
