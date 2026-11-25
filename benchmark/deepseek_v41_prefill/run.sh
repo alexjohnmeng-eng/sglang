@@ -89,6 +89,7 @@ experiment_args=(-e "SGLANG_EXPERIMENT_DSV41_Q8_TMA_SWA=${PREFILL_Q8_TMA_SWA:-0}
 if [[ "${PREFILL_DEEPGEMM473_32K:-0}" == 1 ]]; then
   experiment_args+=(
     -e SGLANG_EXPERIMENT_DSV41_MEGA_MOE_32K=1
+    -e DG_SM90_PREFILL_EARLY_COMBINE=0
   )
 fi
 if [[ -n "${PREFILL_DEEPGEMM473_SITE:-}" ]]; then
