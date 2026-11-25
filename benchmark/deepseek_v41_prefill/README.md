@@ -176,6 +176,13 @@ PREFILL_DENSE_DEEPGEMM_SITE。当前实测候选为 64K 98,323 tok/s、
 候选 GSM8K 为 1280/1319，零请求错误。首次候选运行的 GSM8K 为 1281/1319，
 重复运行采用同一份提示和目标哈希，结果存在题目级波动。
 
+本轮扩展文件为
+/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/wqb-q8-rope/site/，
+`deep_gemm/_C.so` 的 SHA256 为
+d4b637af2991c44d329f4e909add54fd7247cb95dfe1971c30a26935fea04967。
+扩展源代码和构建脚本在同一实验目录的 `DeepGEMM/` 与 `build.sh`，运行前需
+先构建 `_C.so`，再把 `site/` 传给 `PREFILL_DENSE_DEEPGEMM_SITE`。
+
 ## 镜像与源码
 
 验证镜像的不可变 image ID：
