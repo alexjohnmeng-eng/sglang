@@ -8,6 +8,7 @@ the conversion can be validated without changing the online Humming runner.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import replace
 from typing import Optional
 
@@ -237,9 +238,13 @@ def run_global_ids(
         and num_tokens in (16384, 32768)
         and parallel.attn_cp_size == parallel.moe_ep_size == 8
     ):
-        # The current SM90 kernel's early-combine bitmap supports 16K
-        # local rows. A 32K local prefill uses two launches on that buffer.
-        capacity = max(capacity, 16384)
+        # The default early-combine bitmap supports 16K local rows. The
+        # experimental 32K setting is isolated because its bitmap/workspace
+        # footprint is larger and may fail graph capture on older wheels.
+        capacity = max(
+            capacity,
+            32768 if os.environ.get("SGLANG_EXPERIMENT_DSV41_MEGA_MOE_32K") == "1" else 16384,
+        )
     buffer = _get_buffer(capacity, total_experts)
     from sglang.kernels.ops.quantization.fp8_kernel import (
         sglang_per_token_group_quant_fp8,

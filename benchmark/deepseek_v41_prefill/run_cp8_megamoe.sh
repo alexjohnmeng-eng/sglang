@@ -29,6 +29,7 @@ export PREFILL_HUMMING_NTAIL=1 PREFILL_SHARED_TP1=1 PREFILL_WQB_Q8_ROPE=1
 export PREFILL_FLASHINFER_SITE="${PREFILL_FLASHINFER_SITE:-$runtime/fi075/site}"
 export PREFILL_EP_PLACEMENT="${PREFILL_EP_PLACEMENT:-$previous/routes-calibration-v1/placement-variable_copies.json}"
 export PREFILL_DEEPGEMM473_SITE="${PREFILL_DEEPGEMM473_SITE:-$previous/upstream-20261125/deepgemm-473-prefill-tuning-site}"
+export PREFILL_DEEPGEMM473_32K="${PREFILL_DEEPGEMM473_32K:-0}"
 export PREFILL_DENSE_DEEPGEMM_SITE="${PREFILL_DENSE_DEEPGEMM_SITE:-$dense/site}"
 export PREFILL_LONG_PROBE="${PREFILL_LONG_PROBE:-$previous/probe_long_prefill.py}"
 exec bash "$runtime/repro/prefill-plus20-20261124/run_prefill_with_gsm8k.sh" "$repo"
