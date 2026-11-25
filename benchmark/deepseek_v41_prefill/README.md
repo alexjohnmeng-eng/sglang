@@ -280,6 +280,25 @@ PREFILL_DENSE_MULTICAST=1 bash benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh
 SHA256 为 `a225af5048055b3c7acdbee8df19fbab8abb5f83cfa35fff850b176746432a70`。
 吞吐、精度、长提示和八卡 profile 明细在 `serving-v2/` 与 `serving-v2-repeat/`。
 
+## 连续 SWA 的 TMA KV 加载
+
+在 CP8 Q8 sparse prefill 中，最后两个 SWA KV block 的索引连续且有效时，
+`PREFILL_Q8_TMA_SWA=1` 使用 TMA 直接加载 KV。其余稀疏或带压缩 KV 的请求
+继续使用原来的 `cp.async` 路径。开关只在至少 8192 行、64 个 query head、
+512 维 QK 的 H20 prefill 形状启用。
+
+```bash
+PREFILL_DENSE_MULTICAST=1 PREFILL_Q8_TMA_SWA=1 \\
+  bash benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh 262144
+```
+
+在 dense multicast 与 Mega mHC 同时启用时，严格测试为 **99803.78 / 97538.67
+tok/s**，全量 GSM8K **1278/1319**，零请求错误。该运行的四组长提示下一 token
+与对应对照一致，输入和目标哈希一致。八卡 Q8 attention kernel 累计时间由
+**61.404 → 60.914 ms/rank**（64K）和 **245.143 → 243.415 ms/rank**（256K）。
+该结果已在本地分支提交 `f85da409df`，profile、评测和长提示结果位于
+`/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/q8-swa-tma/serving-combined/`。
+
 ## 镜像与源码
 
 验证镜像的不可变 image ID：
