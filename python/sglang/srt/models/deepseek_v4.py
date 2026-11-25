@@ -1920,7 +1920,7 @@ class MQALayer(MqaAttentionBase):
             and isinstance(q, torch.Tensor)
             and q.dtype == torch.bfloat16
             and q.ndim == 2
-            and q.shape[0] in (8192, 16384)
+            and q.shape[0] in (8192, 16384, 32768)
             and q.shape[1] == 1280
             and q.is_contiguous()
             and q_out.shape == (q.shape[0], 64, 512)
@@ -2088,7 +2088,7 @@ class MQALayer(MqaAttentionBase):
                     and attn_backend.cp_compressor_projects_local_rows
                     and attn_backend.forward_metadata.late_layer_tail is None
                     and forward_batch.batch_size == 1
-                    and x.shape[0] in (8192, 16384)
+                    and x.shape[0] in (8192, 16384, 32768)
                     and int(forward_batch.attn_cp_metadata.total_seq_lens)
                     == 8 * x.shape[0]
                 ),

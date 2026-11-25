@@ -234,10 +234,12 @@ def run_global_ids(
         tune_prefill
         and _use_deepgemm()
         and envs.SGLANG_OPT_DSV41_SM90_MEGAMOE_16K_PREFILL.get()
-        and num_tokens == 16384
+        and num_tokens in (16384, 32768)
         and parallel.attn_cp_size == parallel.moe_ep_size == 8
     ):
-        capacity = max(capacity, num_tokens)
+        # The current SM90 kernel's early-combine bitmap supports 16K
+        # local rows. A 32K local prefill uses two launches on that buffer.
+        capacity = max(capacity, 16384)
     buffer = _get_buffer(capacity, total_experts)
     from sglang.kernels.ops.quantization.fp8_kernel import (
         sglang_per_token_group_quant_fp8,

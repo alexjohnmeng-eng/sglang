@@ -3893,7 +3893,7 @@ class DeepseekV4AttnBackend(
                 prefill_pool=(
                     self.cp_compressor_projects_local_rows
                     and tail is None
-                    and q_lens_cpu in ([8192], [16384])
+                    and q_lens_cpu in ([8192], [16384], [32768])
                     and total == 8 * q_lens_cpu[0]
                 ),
             )

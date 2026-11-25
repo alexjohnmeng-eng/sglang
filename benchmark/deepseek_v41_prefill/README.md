@@ -153,7 +153,7 @@ bash "$results/run_deepgemm473_serving.sh"
 
 ## SM90 wq_b 与 RoPE/Q8 融合
 
-在 CP8、q8 sparse prefill、8192 CP-local rows 的目标形状下，可通过
+在 CP8 和 Q8 sparse prefill 下，对 8192、16384、32768 个 CP-local 行可通过
 SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=1 将 wq_b block32
 DeepGEMM、BF16 舍入、局部 64 维 RoPE 和 FP8 Q staging 合并。该开关需要
 挂载单独构建的 DeepGEMM 扩展到 /repro/dense_deepgemm，仅用于 SM90
@@ -194,6 +194,32 @@ CP rank、无 gather index、各 rank 行数相等的请求才会启用该路径
 `/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/wqb-q8-rope/`
 中的 `run_kv-serving.sh` 和 `run_kv-repeat.sh` 使用相同的 wq_b Q8 epilogue
 扩展，分别完成严格吞吐、八卡 profile 和全量 GSM8K。
+
+## CP8/EP8 的 256K 单块 prefill
+
+在 `PREFILL_DEEPGEMM473_16K=1` 与 Q8 sparse prefill 下，单个 262144-token chunk
+在每个 CP rank 上有 32768 行。路由、C2 投影池化和 wq_b/RoPE 在整块上处理，MegaMoE
+复用 16384 行工作区并调用两次。镜像、扩展与专家 placement 随运行清单记录。
+
+在宿主机从本分支仓库根目录执行。脚本会在同一容器中完成两档严格吞吐、八卡 GPU-only
+profile、全量 GSM8K 和长提示探针。可通过 `PREFILL_REVISION` 固定源码提交，
+通过 `PREFILL_OUTPUT` 指定独立的结果目录。
+
+```bash
+bash benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh 262144
+```
+
+| Chunk | 64K tok/s | 256K tok/s | GSM8K |
+| ---: | ---: | ---: | ---: |
+| 65536 | 98477.12 | 94869.91 | 1279/1319 |
+| 131072 | 98355.03 | 95941.48 | 1280/1319 |
+| 262144 | 98430.25 | 96216.44 | 1279/1319 |
+| 262144 复测 | 98383.98 | 96143.06 | 1278/1319 |
+
+四次运行均零 GSM8K 请求错误，评测提示和目标哈希一致。详细数据在
+`/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/` 下的
+`wqb-q8-rope/kv-repeat-1`、`rank-major-chunk-131072`、`rank-major-chunk-262144-v2`
+与 `rank-major-chunk-262144-repeat`。
 
 ## 镜像与源码
 
