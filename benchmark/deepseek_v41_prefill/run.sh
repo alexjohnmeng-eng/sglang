@@ -93,6 +93,12 @@ if [[ -n "${PREFILL_DEEPGEMM473_SITE:-}" ]]; then
     -v "$PREFILL_DEEPGEMM473_SITE:/repro/deepgemm473:ro"
   )
 fi
+if [[ -n "${PREFILL_DENSE_DEEPGEMM_SITE:-}" ]]; then
+  experiment_args+=(
+    -v "$PREFILL_DENSE_DEEPGEMM_SITE:/repro/dense_deepgemm:ro"
+    -e "SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=${PREFILL_WQB_Q8_ROPE:-0}"
+  )
+fi
 docker run -d --name "$container" --gpus all --ipc=host --network=host \
   --ulimit memlock=-1 --ulimit stack=67108864 --ulimit core=0 \
   --cap-add IPC_LOCK "${device_args[@]}" "${experiment_args[@]}" \

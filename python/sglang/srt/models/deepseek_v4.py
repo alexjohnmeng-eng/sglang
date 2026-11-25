@@ -1903,6 +1903,45 @@ class MQALayer(MqaAttentionBase):
         row_plan: Optional[head_a2a.HeadA2APlan] = None,
     ) -> torch.Tensor:
         """With ``row_plan.row_q`` the result is this rank's row slice with all heads."""
+        if (
+            envs.SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE.get()
+            and self.is_dsv41
+            and self.attn_proj is not None
+            and self.cp_prefill_symm
+            and get_platform().is_sm90
+            and get_parallel().attn_cp_size == 8
+            and not self.q_head_norm
+            and not self.use_mega_attention
+            and (row_plan is None or not row_plan.row_q)
+            and q_out is not None
+            and q_out.dtype == torch.float8_e4m3fn
+            and q_out.is_contiguous()
+            and isinstance(q, torch.Tensor)
+            and q.dtype == torch.bfloat16
+            and q.ndim == 2
+            and q.shape[0] in (8192, 16384)
+            and q.shape[1] == 1280
+            and q.is_contiguous()
+            and q_out.shape == (q.shape[0], 64, 512)
+            and self.wq_b.bias is None
+            and getattr(self.wq_b.quant_method, "weight_block_size", None) == [32, 32]
+            and not get_exec().deterministic.enable_deterministic_inference
+        ):
+            from sglang.kernels.ops.quantization.fp8_block32_act_quant import (
+                block32_act_quant_ue8m0_mn_major,
+            )
+
+            q_fp8, scale = block32_act_quant_ue8m0_mn_major(q)
+            torch.ops.deep_gemm.dsv41_wqb_q8_rope(
+                q_fp8,
+                scale,
+                self.wq_b.weight,
+                self.wq_b.weight_scale_inv,
+                q_out.view(q.shape[0], -1),
+                positions.to(torch.int64).contiguous(),
+                torch.view_as_real(self.freqs_cis).flatten(-2),
+            )
+            return q_out
         if row_plan is not None and row_plan.row_q:
             q, positions = head_a2a.project_row_q(
                 layer=self, q_lora=q, positions=positions, plan=row_plan

@@ -151,6 +151,31 @@ bash "$results/run_deepgemm473_serving.sh"
 关闭 radix cache，先测 64K 和 256K 并采集八卡 GPU-only trace，再用同一
 实例跑全量 GSM8K。
 
+## SM90 wq_b 与 RoPE/Q8 融合
+
+在 CP8、q8 sparse prefill、8192 CP-local rows 的目标形状下，可通过
+SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=1 将 wq_b block32
+DeepGEMM、BF16 舍入、局部 64 维 RoPE 和 FP8 Q staging 合并。该开关需要
+挂载单独构建的 DeepGEMM 扩展到 /repro/dense_deepgemm，仅用于 SM90
+CP8 的 wq_b 形状，其他形状继续走原路径。
+
+完整复现实验保存在
+/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/wqb-q8-rope/。
+其中 run_serving.sh 0 是关闭开关的同源对照，run_serving.sh 1 是候选，
+两者均执行严格 64K/256K 测试、八卡 GPU-only profile 和全量 GSM8K。
+
+```bash
+experiment=/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/wqb-q8-rope
+bash "$experiment/run_serving.sh" 0
+bash "$experiment/run_serving.sh" 1
+```
+
+候选运行还要求将 site/ 中的 _C.so 和 Python 包挂载为
+PREFILL_DENSE_DEEPGEMM_SITE。当前实测候选为 64K 98,323 tok/s、
+256K 94,721 tok/s，同源对照为 64K 97,674 tok/s、256K 94,343 tok/s。
+候选 GSM8K 为 1280/1319，零请求错误。首次候选运行的 GSM8K 为 1281/1319，
+重复运行采用同一份提示和目标哈希，结果存在题目级波动。
+
 ## 镜像与源码
 
 验证镜像的不可变 image ID：

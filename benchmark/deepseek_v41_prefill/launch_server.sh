@@ -4,6 +4,10 @@ set -euo pipefail
 ulimit -c 0
 export PATH=/opt/sglang/bin:$PATH
 export PYTHONPATH=/repro/flashinfer:/repro/deps:/repro/source/python
+if [[ -d /repro/dense_deepgemm ]]; then
+  export PYTHONPATH="/repro/dense_deepgemm:$PYTHONPATH"
+  export DG_JIT_CACHE_DIR=/repro/cache/deepgemm-wqb-q8-rope
+fi
 if [[ "${SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM:-0}" == 1 ]]; then
   export PYTHONPATH="/repro/deepgemm473:$PYTHONPATH"
   export DG473_JIT_CACHE_DIR=/repro/cache/deepgemm473
