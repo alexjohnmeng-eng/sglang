@@ -183,6 +183,18 @@ d4b637af2991c44d329f4e909add54fd7247cb95dfe1971c30a26935fea04967。
 扩展源代码和构建脚本在同一实验目录的 `DeepGEMM/` 与 `build.sh`，运行前需
 先构建 `_C.so`，再把 `site/` 传给 `PREFILL_DENSE_DEEPGEMM_SITE`。
 
+## CP8 rank-major KV gather
+
+提交 d03fb60653 在满足等长 CP8 分片条件时，让 SWA KV gather 直接写入
+rank-major 槽位，并把对应映射传给 V4 KV 写回。SM90、V4 page layout、8 个
+CP rank、无 gather index、各 rank 行数相等的请求才会启用该路径，其他请求
+继续使用原有全局顺序 gather。
+
+实验目录
+`/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/wqb-q8-rope/`
+中的 `run_kv-serving.sh` 和 `run_kv-repeat.sh` 使用相同的 wq_b Q8 epilogue
+扩展，分别完成严格吞吐、八卡 profile 和全量 GSM8K。
+
 ## 镜像与源码
 
 验证镜像的不可变 image ID：
