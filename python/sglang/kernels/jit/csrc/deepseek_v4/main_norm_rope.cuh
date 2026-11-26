@@ -310,6 +310,7 @@ struct FusedKNormRopeFlashMLAParams {
   int64_t kv_stride_batch;
   uint32_t batch_size;
   float eps;
+  uint32_t cp_shard_rows = 0;
   // kRopeQ: (B, num_q_heads, kHeadDim) DType; the trailing kRopeDim of every head
   // are rotated in place with this token's frequencies by the same launch.
   void* __restrict__ q = nullptr;
@@ -379,7 +380,8 @@ template <
     int32_t kPageBits,
     deepseek_v4::KVLayout kLayout,
     bool kUsePDL,
-    bool kRopeQ = false>
+    bool kRopeQ = false,
+    bool kCP8RankMajor = false>
 K_KERNEL void fused_k_norm_rope_flashmla(const __grid_constant__ FusedKNormRopeFlashMLAParams params) {
   using namespace device;
 
@@ -404,7 +406,8 @@ K_KERNEL void fused_k_norm_rope_flashmla(const __grid_constant__ FusedKNormRopeF
   }
   if (work_id >= params.batch_size) return;
 
-  const auto input_ptr = static_cast<const DType*>(params.kv) + work_id * params.kv_stride_batch;
+  const auto input_row = kCP8RankMajor ? (work_id % 8) * params.cp_shard_rows + work_id / 8 : work_id;
+  const auto input_ptr = static_cast<const DType*>(params.kv) + input_row * params.kv_stride_batch;
   const auto position = static_cast<int32_t>(static_cast<const PosT*>(params.positions)[work_id]);
   const auto freqs_cis = params.freqs_cis + position * kRopeDim;
 
@@ -663,9 +666,9 @@ struct FusedKNormRopeFlashMLAKernel {
   static_assert(1 << kLogPageSize == kPageSize);
   static_assert(kHeadDim == 512 && kRopeDim == 64, "FlashMLA layout requires (512, 64)");
 
-  template <typename PosT, bool kRopeQ>
+  template <typename PosT, bool kRopeQ, bool kCP8RankMajor = false>
   static constexpr auto kernel =
-      fused_k_norm_rope_flashmla<DType, kHeadDim, kRopeDim, PosT, kLogPageSize, kLayout, kUsePDL, kRopeQ>;
+      fused_k_norm_rope_flashmla<DType, kHeadDim, kRopeDim, PosT, kLogPageSize, kLayout, kUsePDL, kRopeQ, kCP8RankMajor>;
   template <typename PosT>
   static constexpr auto kernel_v41 =
       fused_k_norm_rope_flashmla_v41<DType, kHeadDim, kRopeDim, PosT, kLogPageSize, kLayout, kUsePDL>;
@@ -677,8 +680,9 @@ struct FusedKNormRopeFlashMLAKernel {
       const tvm::ffi::TensorView positions,
       const tvm::ffi::TensorView out_loc,
       const tvm::ffi::TensorView kvcache,
-      float eps) {
-    forward_impl<false>(kv, kv_weight, freqs_cis, positions, out_loc, kvcache, eps, nullptr);
+      float eps,
+      uint32_t cp_shard_rows) {
+    forward_impl<false>(kv, kv_weight, freqs_cis, positions, out_loc, kvcache, eps, nullptr, cp_shard_rows);
   }
 
   /// `forward` with the same tokens' query heads `q` (B, H, kHeadDim) roped in place.
@@ -691,7 +695,7 @@ struct FusedKNormRopeFlashMLAKernel {
       const tvm::ffi::TensorView kvcache,
       float eps,
       const tvm::ffi::TensorView q) {
-    forward_impl<true>(kv, kv_weight, freqs_cis, positions, out_loc, kvcache, eps, &q);
+    forward_impl<true>(kv, kv_weight, freqs_cis, positions, out_loc, kvcache, eps, &q, 0);
   }
 
  private:
@@ -704,7 +708,8 @@ struct FusedKNormRopeFlashMLAKernel {
       const tvm::ffi::TensorView out_loc,
       const tvm::ffi::TensorView kvcache,
       float eps,
-      const tvm::ffi::TensorView* q) {
+      const tvm::ffi::TensorView* q,
+      uint32_t cp_shard_rows) {
     using namespace host;
 
     auto B = SymbolicSize{"batch_size"};
@@ -752,6 +757,7 @@ struct FusedKNormRopeFlashMLAKernel {
         .kv_stride_batch = kv.stride(0),
         .batch_size = batch_size,
         .eps = eps,
+        .cp_shard_rows = cp_shard_rows,
     };
     if constexpr (kRopeQ) {
       auto H = SymbolicSize{"num_q_heads"};
@@ -767,6 +773,14 @@ struct FusedKNormRopeFlashMLAKernel {
       params.q_stride_batch = q->stride(0);
       params.q_stride_head = q->stride(1);
       params.num_q_heads = static_cast<uint32_t>(H.unwrap());
+    }
+    if constexpr (kLayout == deepseek_v4::KVLayout::V4 && !kRopeQ) {
+      if (cp_shard_rows != 0) {
+        RuntimeCheck(batch_size % 8 == 0 && batch_size / 8 == cp_shard_rows, "invalid CP8 rank-major KV size");
+        const auto k = pos_dtype.is_type<int32_t>() ? kernel<int32_t, false, true> : kernel<int64_t, false, true>;
+        LaunchKernel(batch_size, kFusedKBlockSize, device_.unwrap()).enable_pdl(kUsePDL)(k, params);
+        return;
+      }
     }
     if constexpr (kLayout != deepseek_v4::KVLayout::V4 && !kRopeQ) {
       if (batch_size >= kFusedKV41MinTokens) {

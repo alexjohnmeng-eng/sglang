@@ -3885,7 +3885,17 @@ class DeepseekV4AttnBackend(
         assert cp_projected is None or (run_compressor and layer.compressor is not None)
         if cp_projected is not None:
             self._low_ratio_compress_torch(
-                layer, None, req_global, pos_global, projected=cp_projected
+                layer,
+                None,
+                req_global,
+                pos_global,
+                projected=cp_projected,
+                prefill_pool=(
+                    self.cp_compressor_projects_local_rows
+                    and tail is None
+                    and q_lens_cpu in ([8192], [16384], [32768])
+                    and total == 8 * q_lens_cpu[0]
+                ),
             )
         elif (
             run_compressor
@@ -4159,7 +4169,15 @@ class DeepseekV4AttnBackend(
             )
 
     def _low_ratio_compress_torch(
-        self, layer, x, req, pos, projected=None, *, fuse_index_store=False
+        self,
+        layer,
+        x,
+        req,
+        pos,
+        projected=None,
+        *,
+        fuse_index_store=False,
+        prefill_pool=False,
     ) -> None:
         core = self.forward_metadata.core_metadata
         num_tokens = pos.shape[0]
@@ -4176,18 +4194,46 @@ class DeepseekV4AttnBackend(
             )
             return
 
-        partner_kv, partner_score = self._low_ratio_pair_partners(
-            layer_id=layer.layer_id,
-            kv=kv,
-            score=score,
-            req=req,
-            pos=pos,
-            pad=core.raw_out_loc[:num_tokens] == 0,
-        )
-        pooled = layer.compressor.pool_pairs(
-            torch.stack([partner_kv, kv], dim=1),
-            torch.stack([partner_score, score], dim=1),
-        )
+        raw_out_loc = core.raw_out_loc[:num_tokens]
+        if prefill_pool:
+            from sglang.kernels.ops.attention.dsv4.c2_decode_pool import c2_prefill_pool
+
+            state = self.token_to_kv_pool.get_attention_compress_states(layer.layer_id)
+            ring = state.ring_size
+            pooled = c2_prefill_pool(
+                kv,
+                score,
+                pos,
+                raw_out_loc,
+                req,
+                state.kv_score_buffer.kv_score,
+                ring_size=ring,
+            )
+            # The single request fills this chunk, so only its last ring rows
+            # can survive. Queue those writes after the pooling kernel's reads.
+            tail = slice(-ring, None)
+            if kv.ndim == 3:
+                rows_per_rank = (ring + kv.shape[0] - 1) // kv.shape[0]
+                kv = kv[:, -rows_per_rank:].transpose(0, 1).flatten(0, 1)
+                score = score[:, -rows_per_rank:].transpose(0, 1).flatten(0, 1)
+            write_pos = pos[tail].masked_fill(raw_out_loc[tail] == 0, -1)
+            state.set_state_by_state_loc(
+                state.translate_from_req_position_to_state_loc(req[tail], write_pos),
+                KVAndScore.from_kv_score(kv=kv[tail], score=score[tail]),
+            )
+        else:
+            partner_kv, partner_score = self._low_ratio_pair_partners(
+                layer_id=layer.layer_id,
+                kv=kv,
+                score=score,
+                req=req,
+                pos=pos,
+                pad=raw_out_loc == 0,
+            )
+            pooled = layer.compressor.pool_pairs(
+                torch.stack([partner_kv, kv], dim=1),
+                torch.stack([partner_score, score], dim=1),
+            )
         group_pos = torch.where(pos % 2 == 1, pos - 1, pos)
         out_loc = core.c2_out_loc[:num_tokens]
         slots = torch.where(out_loc >= 0, out_loc, torch.zeros_like(out_loc))

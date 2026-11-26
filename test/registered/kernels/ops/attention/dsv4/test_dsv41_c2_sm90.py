@@ -54,6 +54,80 @@ def _unfused_write(pooled, weight, eps, freqs, slots, group_pos, cache, page_siz
 
 @unittest.skipUnless(SM90_UP, "SM90+ CUDA")
 class TestC2VerifyPool(CustomTestCase):
+    def test_prefill_pool_matches_torch_with_strided_projections(self):
+        from sglang.kernels.ops.attention.dsv4.c2_decode_pool import c2_prefill_pool
+        from sglang.srt.layers.attention.deepseek_v4_backend import (
+            DeepseekV4AttnBackend,
+        )
+        from sglang.srt.layers.attention.dsv4.dsv41_sparse import DeepseekV41Compressor
+        from sglang.srt.mem_cache.deepseek_v4_compress_state import CompressStatePool
+
+        ring, rows = 8, 33
+        state = CompressStatePool(
+            size=2 * ring,
+            ring_size=ring,
+            overlap=False,
+            head_dim=DIM,
+            dtype=torch.float32,
+            device="cuda",
+            enable_memory_saver=False,
+            ratio=2,
+        )
+        backend = object.__new__(DeepseekV4AttnBackend)
+        backend.token_to_kv_pool = SimpleNamespace(
+            get_attention_compress_states=lambda layer_id: state
+        )
+        torch.manual_seed(42)
+        projected = torch.randn(rows, 2 * DIM, device="cuda")
+        kv, score = projected.split(DIM, dim=-1)
+        req = torch.ones(rows, dtype=torch.int64, device="cuda")
+        loc = torch.arange(256, 256 + rows, device="cuda")
+        loc[-1] = 0
+        for prefix in (0, 1, 65536):
+            with self.subTest(prefix=prefix):
+                pos = torch.arange(prefix, prefix + rows, device="cuda")
+                storage = state.kv_score_buffer.kv_score
+                storage.normal_()
+                state.kv_score_buffer[-1].clear()
+                actual = c2_prefill_pool(
+                    kv, score, pos, loc, req, storage, ring_size=ring
+                )
+                cp_ranks = 8
+                cp_rows = rows - rows % cp_ranks
+                rank_major = (
+                    projected[:cp_rows]
+                    .unflatten(0, (-1, cp_ranks))
+                    .transpose(0, 1)
+                    .contiguous()
+                )
+                kv_rank_major, score_rank_major = rank_major.split(DIM, dim=-1)
+                actual_rank_major = c2_prefill_pool(
+                    kv_rank_major,
+                    score_rank_major,
+                    pos[:cp_rows],
+                    loc[:cp_rows],
+                    req[:cp_rows],
+                    storage,
+                    ring_size=ring,
+                )
+                prev_kv, prev_score = backend._low_ratio_pair_partners(
+                    layer_id=0, kv=kv, score=score, req=req, pos=pos, pad=loc == 0
+                )
+                expected = DeepseekV41Compressor.pool_pairs(
+                    torch.stack([prev_kv, kv], dim=1),
+                    torch.stack([prev_score, score], dim=1),
+                )
+                self.assertTrue(
+                    torch.equal(actual.view(torch.int32), expected.view(torch.int32))
+                )
+                with self.subTest(layout="rank-major"):
+                    self.assertTrue(
+                        torch.equal(
+                            actual_rank_major.view(torch.int32),
+                            expected[:cp_rows].view(torch.int32),
+                        )
+                    )
+
     def test_verify_rows_match_backend_pair_partners(self):
         """Ragged verify windows, padding rows aliasing request 0, and positions
         that wrap the ring, replayed from one CUDA graph: pooled rows, group

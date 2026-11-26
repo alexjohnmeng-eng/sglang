@@ -32,6 +32,7 @@ from sglang.kernels.ops.attention.dsv4 import (
     fused_q_norm_rope,
     fused_rope_inplace,
 )
+from sglang.kernels.ops.attention.dsv4.kv_layout import KVLayout
 from sglang.kernels.ops.attention.dsv4.wo_a import MAX_M as _FUSED_WO_A_MAX_TOKENS
 from sglang.kernels.ops.attention.dsv4.wo_a import (
     can_use_fused_wo_a,
@@ -1903,6 +1904,45 @@ class MQALayer(MqaAttentionBase):
         row_plan: Optional[head_a2a.HeadA2APlan] = None,
     ) -> torch.Tensor:
         """With ``row_plan.row_q`` the result is this rank's row slice with all heads."""
+        if (
+            envs.SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE.get()
+            and self.is_dsv41
+            and self.attn_proj is not None
+            and self.cp_prefill_symm
+            and get_platform().is_sm90
+            and get_parallel().attn_cp_size == 8
+            and not self.q_head_norm
+            and not self.use_mega_attention
+            and (row_plan is None or not row_plan.row_q)
+            and q_out is not None
+            and q_out.dtype == torch.float8_e4m3fn
+            and q_out.is_contiguous()
+            and isinstance(q, torch.Tensor)
+            and q.dtype == torch.bfloat16
+            and q.ndim == 2
+            and q.shape[0] in (8192, 16384, 32768)
+            and q.shape[1] == 1280
+            and q.is_contiguous()
+            and q_out.shape == (q.shape[0], 64, 512)
+            and self.wq_b.bias is None
+            and getattr(self.wq_b.quant_method, "weight_block_size", None) == [32, 32]
+            and not get_exec().deterministic.enable_deterministic_inference
+        ):
+            from sglang.kernels.ops.quantization.fp8_block32_act_quant import (
+                block32_act_quant_ue8m0_mn_major,
+            )
+
+            q_fp8, scale = block32_act_quant_ue8m0_mn_major(q)
+            torch.ops.deep_gemm.dsv41_wqb_q8_rope(
+                q_fp8,
+                scale,
+                self.wq_b.weight,
+                self.wq_b.weight_scale_inv,
+                q_out.view(q.shape[0], -1),
+                positions.to(torch.int64).contiguous(),
+                torch.view_as_real(self.freqs_cis).flatten(-2),
+            )
+            return q_out
         if row_plan is not None and row_plan.row_q:
             q, positions = head_a2a.project_row_q(
                 layer=self, q_lora=q, positions=positions, plan=row_plan
@@ -2012,12 +2052,27 @@ class MQALayer(MqaAttentionBase):
 
     def _start_cp_prefill_gathers(
         self, *, x, x_linear, qkv_a, forward_batch, attn_backend
-    ) -> Tuple[Optional[Callable], Optional[Callable]]:
+    ) -> Tuple[Optional[Callable], Optional[Callable], int]:
         """Start the CP gathers of this rank's SWA KV and low-ratio compressor
-        projections; each returned call finishes one, None keeps its NCCL path."""
-        finish_kv = start_cp_kv_gather(
-            kv=self._cp_local_kv(x_linear, qkv_a), forward_batch=forward_batch
-        )
+        projections. Return the shard size for a KV gather kept in rank order."""
+        kv = self._cp_local_kv(x_linear, qkv_a)
+        finish_kv = None
+        cp_shard_rows = 0
+        if (
+            self.is_dsv41
+            and get_platform().is_sm90
+            and get_parallel().attn_cp_size == 8
+            and kv.shape[0] >= 2048
+            and not get_token_to_kv_pool().uniform_fp8
+            and get_token_to_kv_pool().get_swa_key_layout() is KVLayout.V4
+        ):
+            finish_kv = start_cp_kv_gather(
+                kv=kv, forward_batch=forward_batch, rank_major_cp8=True
+            )
+            if finish_kv is not None:
+                cp_shard_rows = int(forward_batch.attn_cp_metadata.total_seq_lens) // 8
+        if finish_kv is None:
+            finish_kv = start_cp_kv_gather(kv=kv, forward_batch=forward_batch)
         finish_projected = None
         if (
             self.compress_ratio in (1, 2)
@@ -2025,9 +2080,20 @@ class MQALayer(MqaAttentionBase):
             and not _low_ratio_sources_break(attn_backend, forward_batch)
         ):
             finish_projected = start_cp_compressor_gather(
-                compressor=self.compressor, x=x, forward_batch=forward_batch
+                compressor=self.compressor,
+                x=x,
+                forward_batch=forward_batch,
+                rank_major=(
+                    self.compressor.use_fused_gate
+                    and attn_backend.cp_compressor_projects_local_rows
+                    and attn_backend.forward_metadata.late_layer_tail is None
+                    and forward_batch.batch_size == 1
+                    and x.shape[0] in (8192, 16384, 32768)
+                    and int(forward_batch.attn_cp_metadata.total_seq_lens)
+                    == 8 * x.shape[0]
+                ),
             )
-        return finish_kv, finish_projected
+        return finish_kv, finish_projected, cp_shard_rows
 
     def _compute_kv_bf16(
         self,
@@ -2462,6 +2528,7 @@ class MQALayer(MqaAttentionBase):
         use_cp = is_cp_active(forward_batch)
         kv: Optional[torch.Tensor]
         finish_cp_kv = finish_cp_projected = None
+        cp_shard_rows = 0
 
         from sglang.srt.layers.attention.dsv4.unified_kv_gate import (
             is_unified_kv_fp8,
@@ -2688,12 +2755,14 @@ class MQALayer(MqaAttentionBase):
         else:
             if use_cp and self.cp_prefill_symm and not defer_cp_attention:
                 # Started before q_b, which hides the transfers; finished below.
-                finish_cp_kv, finish_cp_projected = self._start_cp_prefill_gathers(
-                    x=x,
-                    x_linear=x_linear,
-                    qkv_a=qkv_a,
-                    forward_batch=forward_batch,
-                    attn_backend=attn_backend,
+                finish_cp_kv, finish_cp_projected, cp_shard_rows = (
+                    self._start_cp_prefill_gathers(
+                        x=x,
+                        x_linear=x_linear,
+                        qkv_a=qkv_a,
+                        forward_batch=forward_batch,
+                        attn_backend=attn_backend,
+                    )
                 )
             q_lora, q_for_wqb = self._normalize_q_lora(q_lora)
             if _is_hip:
@@ -2775,6 +2844,7 @@ class MQALayer(MqaAttentionBase):
                     eps=self.eps,
                     freqs_cis=self.freqs_cis,
                     positions=global_positions,
+                    cp_shard_rows=cp_shard_rows,
                 )
                 kv = None
             elif in_replay_tail_graph():

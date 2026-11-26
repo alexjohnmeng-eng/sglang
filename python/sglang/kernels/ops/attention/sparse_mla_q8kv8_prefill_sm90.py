@@ -6,6 +6,7 @@ with FP8 quantized Q and KV tensors.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Optional
 
 import torch
@@ -63,7 +64,7 @@ def _q8kv8_cuda_flags() -> list[str]:
 
 
 @cache_once
-def _jit_sparse_mla_q8kv8_prefill_module() -> Module:
+def _jit_sparse_mla_q8kv8_prefill_module(tma_swa: bool = False) -> Module:
     return load_jit(
         "sparse_mla_q8kv8_prefill_sm90",
         cuda_files=[
@@ -74,26 +75,16 @@ def _jit_sparse_mla_q8kv8_prefill_module() -> Module:
             ("dispatch_full", "sparse_prefill_q8kv8_dispatch_full"),
             ("dispatch_topk_length", "sparse_prefill_q8kv8_dispatch_topk_length"),
         ],
-        extra_cuda_cflags=_q8kv8_cuda_flags(),
+        extra_cuda_cflags=_q8kv8_cuda_flags()
+        + (["-DSGL_EXPERIMENT_Q8_PREFILL_TMA_SWA=1"] if tma_swa else []),
         extra_dependencies=["cutlass"],
     )
 
 
-# Pre-resolve entry-point callables on first use to avoid per-call module
-# dictionary lookups.
-_resolved_entries: Optional[tuple] = None
-
-
-def _get_entries() -> tuple:
-    global _resolved_entries
-    if _resolved_entries is None:
-        m = _jit_sparse_mla_q8kv8_prefill_module()
-        _resolved_entries = (
-            m["dispatch"],
-            m["dispatch_full"],
-            m["dispatch_topk_length"],
-        )
-    return _resolved_entries
+@cache_once
+def _get_entries(tma_swa: bool = False) -> tuple:
+    module = _jit_sparse_mla_q8kv8_prefill_module(tma_swa)
+    return module["dispatch"], module["dispatch_full"], module["dispatch_topk_length"]
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +190,13 @@ def _sparse_mla_q8kv8_prefill_full_op(
     sm_scale: float,
     cuda_stream: int,
 ) -> None:
-    _, dispatch_full_fn, _ = _get_entries()
+    use_tma_swa = (
+        s_q >= 8192
+        and h_q == 64
+        and d_qk == 512
+        and os.environ.get("SGLANG_EXPERIMENT_DSV41_Q8_TMA_SWA") == "1"
+    )
+    _, dispatch_full_fn, _ = _get_entries(use_tma_swa)
     dispatch_full_fn(
         q,
         kv,

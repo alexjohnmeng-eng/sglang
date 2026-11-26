@@ -118,6 +118,168 @@ GSM8K 使用 EvalScope 1.15.0 默认的 4-shot prompt，评测 test split 全部
 将这三类 kernel 计入 `Other`，分析分片时可在原始 trace 中按名称查看。
 [优化记录](../../OPTIMIZATION_PLAN.md#2026-11-24-cp8-prefill-w2-output-sharding-and-fp8-transport)
 
+## CP8/EP8 的 128K chunk
+
+用 128K chunk 测 256K 时，服务处理两个 131072-token chunk。每个大块
+有 16384 个 CP-local 行，调用一次 DeepGEMM MegaMoE。64K 和短批保留
+原有的 8192 行工作区，包括 DSPARK 验证图捕获。
+
+本地复现使用 DeepGEMM #473 的隔离 wheel
+`8cad9399351e58d070c90546ad98b44900523cfdac8839ed02375ed64e9fb081`。
+wheel 与构建记录在实验目录的 `upstream-20261125/`。安装目录保留 wheel 的
+`.dist-info`，模块目录命名为 `deep_gemm_mega`，以便和镜像的 dense
+`deep_gemm` 同时加载。
+
+`PREFILL_DEEPGEMM473_16K=1` 将
+`SGLANG_OPT_DSV41_SM90_MEGAMOE_16K_PREFILL=1` 传给服务。默认值为 0，
+适用于原版 DeepGEMM #473 的 8192 行工作区。
+
+```bash
+runtime=/data1/fjmeng2/dsv41-runtime
+results="$runtime/repro/prefill-110k-20261124"
+repo="$runtime/worktrees/prefill-deepgemm473-chunk128-full"
+PREFILL_EXPERIMENT_REPO="$repo" \
+PREFILL_REVISION="$(git -C "$repo" rev-parse HEAD)" \
+PREFILL_RUN_NAME=deepgemm473-chunk128-repro \
+PREFILL_CHUNK_SIZE=131072 \
+PREFILL_DEEPGEMM473_16K=1 \
+PREFILL_DEEPGEMM473_SITE="$results/upstream-20261125/deepgemm-473-prefill-tuning-site" \
+bash "$results/run_deepgemm473_serving.sh"
+```
+
+脚本使用 8×H20、TP8/CP8 interleave/EP8 与 `per_rank` host Engram，
+关闭 radix cache，先测 64K 和 256K 并采集八卡 GPU-only trace，再用同一
+实例跑全量 GSM8K。
+
+## SM90 wq_b 与 RoPE/Q8 融合
+
+在 CP8 和 Q8 sparse prefill 下，对 8192、16384、32768 个 CP-local 行可通过
+SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=1 将 wq_b block32
+DeepGEMM、BF16 舍入、局部 64 维 RoPE 和 FP8 Q staging 合并。该开关需要
+挂载单独构建的 DeepGEMM 扩展到 /repro/dense_deepgemm，仅用于 SM90
+CP8 的 wq_b 形状，其他形状继续走原路径。
+
+完整复现实验保存在
+/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/wqb-q8-rope/。
+其中 run_serving.sh 0 是关闭开关的同源对照，run_serving.sh 1 是候选，
+两者均执行严格 64K/256K 测试、八卡 GPU-only profile 和全量 GSM8K。
+
+```bash
+experiment=/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/wqb-q8-rope
+bash "$experiment/run_serving.sh" 0
+bash "$experiment/run_serving.sh" 1
+```
+
+候选运行还要求将 site/ 中的 _C.so 和 Python 包挂载为
+PREFILL_DENSE_DEEPGEMM_SITE。当前实测候选为 64K 98,323 tok/s、
+256K 94,721 tok/s，同源对照为 64K 97,674 tok/s、256K 94,343 tok/s。
+候选 GSM8K 为 1280/1319，零请求错误。首次候选运行的 GSM8K 为 1281/1319，
+重复运行采用同一份提示和目标哈希，结果存在题目级波动。
+
+本轮扩展文件为
+/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/wqb-q8-rope/site/，
+`deep_gemm/_C.so` 的 SHA256 为
+d4b637af2991c44d329f4e909add54fd7247cb95dfe1971c30a26935fea04967。
+扩展源代码和构建脚本在同一实验目录的 `DeepGEMM/` 与 `build.sh`，运行前需
+先构建 `_C.so`，再把 `site/` 传给 `PREFILL_DENSE_DEEPGEMM_SITE`。
+
+## CP8 rank-major KV gather
+
+提交 d03fb60653 在满足等长 CP8 分片条件时，让 SWA KV gather 直接写入
+rank-major 槽位，并把对应映射传给 V4 KV 写回。SM90、V4 page layout、8 个
+CP rank、无 gather index、各 rank 行数相等的请求才会启用该路径，其他请求
+继续使用原有全局顺序 gather。
+
+实验目录
+`/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/wqb-q8-rope/`
+中的 `run_kv-serving.sh` 和 `run_kv-repeat.sh` 使用相同的 wq_b Q8 epilogue
+扩展，分别完成严格吞吐、八卡 profile 和全量 GSM8K。
+
+## CP8/EP8 的 256K 单块 prefill
+
+在 `PREFILL_DEEPGEMM473_16K=1` 与 Q8 sparse prefill 下，单个 262144-token chunk
+在每个 CP rank 上有 32768 行。路由、C2 投影池化和 wq_b/RoPE 在整块上处理，MegaMoE
+复用 16384 行工作区并调用两次。镜像、扩展与专家 placement 随运行清单记录。
+
+在宿主机从本分支仓库根目录执行。脚本会在同一容器中完成两档严格吞吐、八卡 GPU-only
+profile、全量 GSM8K 和长提示探针。可通过 `PREFILL_REVISION` 固定源码提交，
+通过 `PREFILL_OUTPUT` 指定独立的结果目录。
+
+```bash
+bash benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh 262144
+```
+
+| Chunk | 64K tok/s | 256K tok/s | GSM8K |
+| ---: | ---: | ---: | ---: |
+| 65536 | 98477.12 | 94869.91 | 1279/1319 |
+| 131072 | 98355.03 | 95941.48 | 1280/1319 |
+| 262144 | 98430.25 | 96216.44 | 1279/1319 |
+| 262144 复测 | 98383.98 | 96143.06 | 1278/1319 |
+
+四次运行均零 GSM8K 请求错误，评测提示和目标哈希一致。详细数据在
+`/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/` 下的
+`wqb-q8-rope/kv-repeat-1`、`rank-major-chunk-131072`、`rank-major-chunk-262144-v2`
+与 `rank-major-chunk-262144-repeat`。
+
+## CP8 SM90 Mega mHC
+
+DeepGEMM #521 的 Hopper 算子将 mHC post、使用上一子层 pre 系数的 collapse、
+RMSNorm 和下一子层的 mix/Sinkhorn 合并。CP8 eager prefill 的 2048 至 32768
+本地行可使用这条 BF16 输出路径。运行入口通过
+`PREFILL_DEEPGEMM521_SITE` 挂载隔离扩展并设置
+`SGLANG_OPT_DSV41_MEGA_MHC_PREFILL=1`。该目录包含
+`deep_gemm_mhc`，来源为 DeepGEMM `410ce17fb3cc`，JIT 缓存位于
+`/repro/cache/deepgemm521`。
+
+```bash
+runtime=/data1/fjmeng2/dsv41-runtime
+experiment=$runtime/repro/prefill-110k-local-20261125/mega-mhc-521
+PREFILL_DEEPGEMM521_SITE="$experiment/site" \
+  bash benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh 262144
+```
+
+| 256K chunk 测试 | 64K tok/s | 256K tok/s | GSM8K |
+| --- | ---: | ---: | ---: |
+| 首轮 | 99598.37 | 97350.52 | 1281/1319 |
+| 同源码复测 | 99599.02 | 97296.19 | 1278/1319 |
+
+两次全量评测的提示和答案哈希一致，请求错误均为零。64K 八卡平均 GPU span
+从 654.309 ms 降到 646.303 ms，每 rank 调用融合算子 38 次。
+算子对照的 BF16 归一化结果相对 L2 差异最高为 2.01×10⁻⁵。
+四组长提示中，三组的下一 token 与 256K chunk 对照一致，seed 43 的 256K
+提示在多次运行中出现不同的下一 token。
+原始报告、模型长提示探针及 wheel 构建材料见上文的实验目录。
+
+## SM90 密集投影 TMA multicast
+
+`PREFILL_DENSE_MULTICAST=1` 选择已验证的密集投影 DeepGEMM
+扩展，同时挂载 Mega mHC 扩展。对于 H20 的 block32 GEMM，
+`wo_b` 在 8192 和 32768 个本地行使用激活 multicast，
+融合 RoPE/Q8 的 `wq_b` 在 32768 行使用权重 multicast。
+两组目标形状的算子对照均逐位一致。
+
+```bash
+PREFILL_DENSE_MULTICAST=1 bash benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh 262144
+```
+
+| 256K chunk 测试 | 64K tok/s | 256K tok/s | GSM8K |
+| --- | ---: | ---: | ---: |
+| Mega mHC 对照复测 | 99599.02 | 97296.19 | 1278/1319 |
+| Dense multicast | 99779.12 | 97470.84 | 1282/1319 |
+| Dense multicast 复测 | 99797.03 | 97462.70 | 1280/1319 |
+
+两次候选都完成了全量 GSM8K，零请求错误，提示和目标哈希与对照一致。
+两次的四组长提示下一 token 相同。64K 八卡 profile 的 `wo_b`
+每 rank 20 次均使用 cluster 2，累计时间由 50.236 ms 降到 49.549 ms。
+256K 的 `wo_b` 和 Q8 `wq_b` 每 rank 各 20 次均使用 cluster 2，
+累计时间由 199.135 ms 和 221.744 ms 降到 196.411 ms 和 220.784 ms。
+
+扩展源代码、`build.sh` 和两次评测在
+`/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/dense-multicast/`。
+可在宿主机运行该目录的 `build.sh` 构建 `site/deep_gemm/_C.so`。实测二进制的
+SHA256 为 `a225af5048055b3c7acdbee8df19fbab8abb5f83cfa35fff850b176746432a70`。
+吞吐、精度、长提示和八卡 profile 明细在 `serving-v2/` 与 `serving-v2-repeat/`。
+
 ## 镜像与源码
 
 验证镜像的不可变 image ID：

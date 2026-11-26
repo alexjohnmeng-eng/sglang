@@ -75,6 +75,8 @@ _LOCAL_ROUTER_ROWS = {
     (2048, 8): 2048,
     (4096, 4): 4096,
     (8192, 8): 8192,
+    (16384, 8): 16384,
+    (32768, 8): 32768,
 }
 _LOCAL_ROUTER_DEVICES = ("NVIDIA H20", "NVIDIA H20-3e")
 # int32 side-payload columns behind the top-k for the fp8 gather's humming scales
@@ -133,11 +135,10 @@ def _start_interleave_gather(
 
 
 def start_cp_kv_gather(
-    *, kv: torch.Tensor, forward_batch
+    *, kv: torch.Tensor, forward_batch, rank_major_cp8: bool = False
 ) -> Optional[Callable[[], torch.Tensor]]:
     """Start the CP all-gather of this rank's SWA KV rows on the copy engines; the
-    returned call finishes it, bitwise cp_materialize_global_token_order. None:
-    take that path instead."""
+    returned call finishes it in global order or in equal CP8 rank-major slots."""
     plan = _interleave_plan(
         local_rows=kv.shape[0],
         forward_batch=forward_batch,
@@ -146,27 +147,61 @@ def start_cp_kv_gather(
     )
     if plan is None:
         return None
+    if rank_major_cp8:
+        comm, send_rows, slot_rows = plan
+        meta = forward_batch.attn_cp_metadata
+        if not (
+            comm.world_size == 8
+            and meta.gather_index is None
+            and int(meta.total_seq_lens) == 8 * slot_rows
+            and all(n == slot_rows for n in meta.per_rank_actual_token)
+            and meta.per_rank_logical_token in (None, meta.per_rank_actual_token)
+            and comm.fits(kv[:send_rows], rows=slot_rows)
+        ):
+            return None
+        return comm.start_gather(kv[:send_rows], rows=slot_rows).finish
     finish = _start_interleave_gather(plan, [kv], forward_batch)
     return None if finish is None else lambda: finish()[0]
 
 
 def start_cp_compressor_gather(
-    *, compressor, x: torch.Tensor, forward_batch
+    *, compressor, x: torch.Tensor, forward_batch, rank_major: bool = False
 ) -> Callable[[], Tuple[Optional[torch.Tensor], ...]]:
     """Project this rank's rows for the low-ratio compressor and start their CP
-    all-gather; the returned call gives the projections of every CP row in global
-    token order (``forward_low_ratio_sources(cp_projected=...)``)."""
-    projected = compressor.project(x)
-    parts = [value for value in projected if value is not None]
-    total = int(forward_batch.attn_cp_metadata.total_seq_lens)
+    all-gather. For a uniform interleave batch the caller may consume the two
+    rank-major planes as [ranks, local rows, width]."""
+    metadata = forward_batch.attn_cp_metadata
+    width = compressor.norm.weight.numel()
     plan = _interleave_plan(
         local_rows=x.shape[0],
         forward_batch=forward_batch,
         user="compressor",
         # The widest row, ratio 2's fp32 kv and score, in bf16 columns; ratio 1
         # shares these buffers.
-        width=4 * parts[0].shape[1],
+        width=4 * width,
     )
+    if rank_major and plan is not None:
+        comm, send_rows, slot_rows = plan
+        if (
+            send_rows == slot_rows == x.shape[0]
+            and metadata.gather_index is None
+            and all(n == slot_rows for n in metadata.per_rank_actual_token)
+        ):
+            packed = compressor.project_fused(x)
+            if comm.fits(packed, rows=slot_rows):
+                pending = comm.start_gather(packed, rows=slot_rows)
+
+                def finish_rank_major():
+                    (gathered,) = pending.finish_parts()
+                    return gathered.unflatten(0, (comm.world_size, slot_rows)).split(
+                        width, dim=-1
+                    )
+
+                return finish_rank_major
+
+    projected = compressor.project(x)
+    parts = [value for value in projected if value is not None]
+    total = int(metadata.total_seq_lens)
     finish = (
         _start_interleave_gather(plan, parts, forward_batch)
         if plan is not None
@@ -302,6 +337,7 @@ def reduce_scatter_with_shared(
     shared: Optional[List[torch.Tensor]],
     rows: int,
     deferred: Optional["HummingDeferredMulSum"] = None,
+    local_shared: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """This rank's ``rows`` rows of the TP sum of ``routed + shared`` ([W * rows,
     hidden] partials on every rank): the MoE's ``routed += shared`` (one bf16
@@ -318,17 +354,23 @@ def reduce_scatter_with_shared(
 
         if deferred.pair_w2_used:
             assert shared is None
-            return comm.reduce_scatter_pair_w2(rows, write_all)
-        return comm.reduce_scatter(rows, write_all=write_all)
+            return comm.reduce_scatter_pair_w2(
+                rows, write_all, local_shared=local_shared
+            )
+        value = comm.reduce_scatter(rows, write_all=write_all)
+    else:
 
-    def write_rows(p: int, out: torch.Tensor) -> None:
-        partial = routed[p * rows : (p + 1) * rows]
-        if shared is None:
-            out.copy_(partial)
-        else:
-            torch.add(partial, shared[p], out=out)
+        def write_rows(p: int, out: torch.Tensor) -> None:
+            partial = routed[p * rows : (p + 1) * rows]
+            if shared is None:
+                out.copy_(partial)
+            else:
+                torch.add(partial, shared[p], out=out)
 
-    return comm.reduce_scatter(rows, write_rows)
+        value = comm.reduce_scatter(rows, write_rows)
+    if local_shared is not None:
+        value.add_(local_shared)
+    return value
 
 
 def _fp8_gather_cols(hidden: int) -> int:
@@ -373,7 +415,7 @@ def _shared_gate_up_takes_prequant(mlp, rows: int) -> bool:
             m > routes.triton_max_m and lookup_swapab(routes.swapab, n, k, m) is None
             for m in (rows, 2 * rows)
         )
-        )
+    )
 
 
 def _start_fp8_gather(
@@ -431,7 +473,7 @@ class CpMoeSymmTransport(ComputeTransport):
         forward_batch,
         call,
         rows,
-        comm: CpPrefillSymm,
+        comm: Optional[CpPrefillSymm],
         local_router: bool,
     ):
         mlp = layer.mlp
@@ -453,6 +495,13 @@ class CpMoeSymmTransport(ComputeTransport):
         topk = self._route_local_rows(
             mlp=mlp, hidden_states=hidden_states, local_router=local_router
         )
+        if comm is None:
+            assert topk is not None and mlp._shared_expert_tp1
+            self.input = hidden_states
+            self.topk_output = StandardTopKOutput(topk[1], topk[0], None)
+            self._local_shared = mlp._forward_shared_experts(hidden_states)
+            self._gathered_rows = _every_row_routed(forward_batch, self.source_rows)
+            return
         fp8 = (
             _start_fp8_gather(comm, mlp, hidden_states, topk)
             if topk is not None
@@ -511,6 +560,20 @@ class CpMoeSymmTransport(ComputeTransport):
             humming_deferred_mul_sum_context,
         )
 
+        if self._comm is None:
+            from sglang.srt.layers.moe.moe_runner.flashinfer_sm90_mxfp4 import (
+                run_global_ids,
+            )
+
+            topk = self.topk_output
+            assert topk is not None
+            weights = topk.topk_weights
+            if not mlp.routed_scaling_factor_fused_in_topk:
+                weights = weights * mlp.routed_scaling_factor
+            return run_global_ids(
+                mlp.experts, self.input, weights, topk.topk_ids, tune_prefill=True
+            )
+
         # The MoE's own deferral is for the shared add it skips here, so the
         # humming run sees this context, also through mlp().
         pair_w2_input = (
@@ -552,17 +615,18 @@ class CpMoeSymmTransport(ComputeTransport):
         return routed
 
     def return_output(self, routed: torch.Tensor) -> torch.Tensor:
+        if self._comm is None:
+            assert self._local_shared is not None
+            return routed.add_(self._local_shared)
         value = reduce_scatter_with_shared(
             self._comm,
             routed=routed,
             shared=self._shared,
             rows=self.source_rows,
             deferred=self._deferred,
+            local_shared=self._local_shared,
         )
-        if self._local_shared is not None:
-            value.add_(self._local_shared)
-            self._local_shared = None
-        self._shared = self._deferred = None
+        self._local_shared = self._shared = self._deferred = None
         return value
 
     def release(self):
@@ -586,6 +650,27 @@ def bind_cp_moe_symm_transport(
         or hidden_states.shape[0] < _MOE_SYMM_MIN_ROWS
         or torch.cuda.is_current_stream_capturing()
     ):
+        return None
+    mlp = layer.mlp
+    if (
+        getattr(mlp.experts, "_flashinfer_sm90_mxfp4_only", False)
+        and parallel.attn_cp_size == parallel.moe_ep_size == 8
+        and mlp._shared_expert_tp1
+        and layer.cp_local_router
+        and (hidden_states.shape[0], parallel.attn_cp_size) in _LOCAL_ROUTER_ROWS
+        and (call.input_ids_global is not None or not _routes_by_token_id(mlp))
+    ):
+        return CpMoeSymmTransport(
+            layer=layer,
+            hidden_states=hidden_states,
+            forward_batch=forward_batch,
+            call=call,
+            rows=rows,
+            comm=None,
+            local_router=True,
+        )
+
+    if getattr(mlp.experts, "_flashinfer_sm90_mxfp4_only", False):
         return None
     comm = get_cp_prefill_symm(
         parallel.attn_cp_group,

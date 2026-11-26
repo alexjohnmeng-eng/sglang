@@ -85,11 +85,30 @@ device_args=()
 if [[ -d /dev/infiniband ]]; then
   device_args+=(--device /dev/infiniband:/dev/infiniband)
 fi
-experiment_args=()
+experiment_args=(-e "SGLANG_EXPERIMENT_DSV41_Q8_TMA_SWA=${PREFILL_Q8_TMA_SWA:-0}")
+if [[ "${PREFILL_DENSE_MULTICAST:-0}" == 1 ]]; then
+  experiment_args+=( -e DG_DSV41_DENSE_MULTICAST=1 )
+fi
+if [[ -n "${PREFILL_FLASHINFER_SITE:-}" ]]; then
+  experiment_args+=( -v "$PREFILL_FLASHINFER_SITE:/repro/flashinfer:ro" )
+fi
+if [[ -n "${PREFILL_DEEPGEMM473_SITE:-}" ]]; then
+  experiment_args+=(
+    -e SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM=1
+    -e "SGLANG_OPT_DSV41_SM90_MEGAMOE_16K_PREFILL=${PREFILL_DEEPGEMM473_16K:-0}"
+    -v "$PREFILL_DEEPGEMM473_SITE:/repro/deepgemm473:ro"
+  )
+fi
 if [[ -n "${PREFILL_DEEPGEMM521_SITE:-}" ]]; then
   experiment_args+=(
     -e SGLANG_OPT_DSV41_MEGA_MHC_PREFILL=1
     -v "$PREFILL_DEEPGEMM521_SITE:/repro/deepgemm521:ro"
+  )
+fi
+if [[ -n "${PREFILL_DENSE_DEEPGEMM_SITE:-}" ]]; then
+  experiment_args+=(
+    -v "$PREFILL_DENSE_DEEPGEMM_SITE:/repro/dense_deepgemm:ro"
+    -e "SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=${PREFILL_WQB_Q8_ROPE:-0}"
   )
 fi
 docker run -d --name "$container" --gpus all --ipc=host --network=host \
@@ -100,9 +119,12 @@ docker run -d --name "$container" --gpus all --ipc=host --network=host \
   -e PREFILL_ATTENTION_BACKEND="${PREFILL_ATTENTION_BACKEND:-auto}" \
   -e PREFILL_HUMMING_NTAIL="${PREFILL_HUMMING_NTAIL:-0}" \
   -e PREFILL_EP_SIZE="${PREFILL_EP_SIZE:-1}" \
+  -e PREFILL_EP8_HISTORICAL="${PREFILL_EP8_HISTORICAL:-0}" \
+  -e PREFILL_EP8_HISTORICAL="${PREFILL_EP8_HISTORICAL:-0}" \
   -e PREFILL_MEM_FRACTION="${PREFILL_MEM_FRACTION:-0.84}" \
   -e SGLANG_EXPERIMENT_DSV41_W2_PAIR_LAYERS="${PREFILL_W2_PAIR_LAYERS:-0}" \
   -e SGLANG_SHARED_EXPERT_TP1="${PREFILL_SHARED_TP1:-0}" \
+  -v "${PREFILL_EP_PLACEMENT:?}:/repro/ep-placement.json:ro" \
   -v "$model:/models/DeepSeek-V4.1-Flash-1017:ro" \
   -v "$output/source:/repro/source:ro" -v "$output/tools:/repro/tools:ro" \
   -v "$output:/repro/results" -v "$deps:/repro/deps:ro" \

@@ -46,6 +46,10 @@ def runtime_manifest():
         "triton": "3.8.0",
         "tilelang": "0.1.12",
     }
+    if os.environ.get("SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM") == "1":
+        # The historical EP8 MegaMoE site was validated with FlashInfer 0.7.5;
+        # the EP1 h20 path intentionally remains on the image's 0.7.2 ABI.
+        expected["flashinfer-python"] = "0.7.5.post1"
     versions = {k: importlib.metadata.version(k) for k in expected}
     mismatches = {k: [expected[k], v] for k, v in versions.items() if v != expected[k]}
     result = {
@@ -64,6 +68,11 @@ def runtime_manifest():
     }
     if mismatches:
         raise RuntimeError(f"Serving dependency drift: {json.dumps(result, indent=2)}")
+    result["modules"]["deep_gemm"] = __import__("deep_gemm").__file__
+    if os.environ.get("SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM") == "1":
+        deep_gemm_mega = __import__("deep_gemm_mega")
+        result["modules"]["deep_gemm_mega"] = deep_gemm_mega.__file__
+        result["versions"]["deepgemm_megamoe"] = deep_gemm_mega.__version__
     if os.environ.get("SGLANG_OPT_DSV41_MEGA_MHC_PREFILL") == "1":
         import deep_gemm_mhc
 

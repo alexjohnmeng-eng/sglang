@@ -4,12 +4,29 @@ set -euo pipefail
 ulimit -c 0
 export PATH=/opt/sglang/bin:$PATH
 export PYTHONPATH=/repro/deps:/repro/source/python
+export SGLANG_JIT_CACHE_DIR=/repro/cache/sgl_kernel_jit
+if [[ -d /repro/flashinfer ]]; then export PYTHONPATH="/repro/flashinfer:$PYTHONPATH"; fi
+if [[ -d /repro/dense_deepgemm ]]; then
+  export PYTHONPATH="/repro/dense_deepgemm:$PYTHONPATH"
+  export DG_JIT_CACHE_DIR=/repro/cache/deepgemm-wqb-q8-rope
+fi
+if [[ "${SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM:-0}" == 1 ]]; then
+  export PYTHONPATH="/repro/deepgemm473:$PYTHONPATH"
+  export DG473_JIT_CACHE_DIR=/repro/cache/deepgemm473
+fi
 if [[ -d /repro/deepgemm521 ]]; then
   export PYTHONPATH="/repro/deepgemm521:$PYTHONPATH"
   export DG521_JIT_CACHE_DIR=/repro/cache/deepgemm521
 fi
 export SGLANG_CACHE_DIR=/repro/cache
 export SGLANG_OPT_DSV41_SM90=1
+if [[ "${PREFILL_EP8_HISTORICAL:-0}" == 1 ]]; then
+  export SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN=1
+  export SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS=8192
+else
+  unset SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN
+  unset SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS
+fi
 export SGLANG_OPT_FP8_WO_A_GEMM=1
 export SGLANG_ENABLE_DSV41_ENGRAM_HOST_TABLE=1
 export SGLANG_DSV41_ENGRAM_HOST_TABLE_LAYOUT=per_rank
@@ -36,6 +53,9 @@ command=(python3 -m sglang.launch_server
   --cuda-graph-max-bs-decode 64 --chunked-prefill-size "${PREFILL_CHUNK_SIZE:-16384}"
   --max-prefill-tokens "${PREFILL_CHUNK_SIZE:-16384}"
   --disable-radix-cache)
+if [[ "${PREFILL_EP8_HISTORICAL:-0}" == 1 ]]; then
+  command+=(--ep-num-redundant-experts 64 --ep-dispatch-algorithm dynamic --init-expert-location /repro/ep-placement.json)
+fi
 if [[ "${PREFILL_ATTENTION_BACKEND:-auto}" != auto ]]; then
   command+=(--dsv4-prefill-backend "$PREFILL_ATTENTION_BACKEND")
 fi

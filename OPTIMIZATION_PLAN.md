@@ -692,3 +692,21 @@ The integrated branch report is
 On merge branch `experiment/dsv41-h20-prefill-merge` from `perf/dsv41-h20`, isolated the SM90 Mega mHC runtime from `d33c4f160b` and added only the minimal DeepGEMM521 site mount/manifest support. The benchmark remained the h20 published protocol: TP8/CP8 interleave/EP1, 64K chunk, Q8 sparse attention, Humming ntail, paired W2 FP8, replicated shared TP1, Engram host per_rank, radix cache disabled, and exact seed-42 64K/256K input IDs.
 
 Candidate throughput was 92,907.02 tok/s at 64K and 89,386.15 tok/s at 256K, versus the h20 control 91,827.37 and 88,414.43 tok/s. The candidate GPU-only profiles are under `/data1/fjmeng2/dsv41-runtime/repro/h20-merge-mhc-serving-20261126/profiles/`. Same source/config GSM8K completed 1319/1319 requests with zero errors and scored 1280/1319; the h20 control is 1281/1319. Candidate is retained for merge because it improves both long-input throughput points by about 1.1% while preserving accuracy within the matched run variation.
+
+## 2026-11-26: Historical EP8 99.8K path isolated from EP1 h20
+
+The historical best prefill configuration is kept behind the explicit
+`PREFILL_EP8_HISTORICAL=1` launcher gate. It selects TP8/CP8/EP8, E384 dynamic
+expert placement with 64 redundant experts, 256K chunking, DeepGEMM #473
+MegaMoE, Mega mHC, Q8 SWA TMA and the optional dense multicast extension.
+The normal h20 path remains EP1 with paired-W2 and Mega mHC. Pair-W2 weight
+initialization already requires `moe_ep_size == 1`, so EP8 cannot accidentally
+allocate or execute the EP1 paired-W2 layout.
+
+The complete reproducer is
+`benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh`; it sets the EP8 gate and
+the required placement/configuration variables. `PREFILL_DENSE_MULTICAST=1`
+adds the dense extension and `PREFILL_Q8_TMA_SWA=1` enables the contiguous SWA
+TMA path. The historical source/runtime artifacts and GSM8K result are under
+`/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/q8-swa-tma/serving-combined/`.
+Any future product commit must run the full GSM8K test before the next commit.

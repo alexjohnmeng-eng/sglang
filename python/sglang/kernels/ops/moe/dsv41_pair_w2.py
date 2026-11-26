@@ -55,7 +55,10 @@ def _quantize_and_push_pair(
 
 
 @triton.jit
-def _sum_colored_slots(src, out, rows, HALF: tl.constexpr, BLOCK: tl.constexpr):
+def _sum_colored_slots(
+    src, out, shared, rows, HALF: tl.constexpr, BLOCK: tl.constexpr,
+    ADD_SHARED: tl.constexpr,
+):
     offset = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     row = offset // (HALF * 2)
     col = offset % (HALF * 2)
@@ -64,13 +67,21 @@ def _sum_colored_slots(src, out, rows, HALF: tl.constexpr, BLOCK: tl.constexpr):
     accum = tl.load(addr, row < rows, 0).to(tl.float32)
     for pair in tl.static_range(1, 4):
         accum += tl.load(addr + pair * 2 * rows * HALF, row < rows, 0).to(tl.float32)
-    tl.store(out + offset, accum.to(tl.bfloat16), row < rows)
+    value = accum.to(tl.bfloat16)
+    if ADD_SHARED:
+        # Preserve the BF16 rounding between the routed sum and shared add.
+        local = tl.load(shared + offset, row < rows, 0)
+        value = (value.to(tl.float32) + local.to(tl.float32)).to(tl.bfloat16)
+    tl.store(out + offset, value, row < rows)
 
 
-def sum_colored_slots(slots, rows, width):
+def sum_colored_slots(slots, rows, width, *, shared=None):
     out = torch.empty((rows, width), dtype=slots.dtype, device=slots.device)
+    if shared is not None:
+        assert shared.shape == out.shape and shared.is_contiguous()
+        assert shared.dtype == out.dtype == torch.bfloat16
     _sum_colored_slots[(triton.cdiv(rows * width, 2048),)](
-        slots, out, rows, width // 2, 2048, num_warps=4
+        slots, out, shared, rows, width // 2, 2048, shared is not None, num_warps=4
     )
     return out
 
