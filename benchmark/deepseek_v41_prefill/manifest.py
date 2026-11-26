@@ -64,6 +64,11 @@ def runtime_manifest():
     }
     if mismatches:
         raise RuntimeError(f"Serving dependency drift: {json.dumps(result, indent=2)}")
+    if os.environ.get("SGLANG_OPT_DSV41_MEGA_MHC_PREFILL") == "1":
+        import deep_gemm_mhc
+
+        result["modules"]["deep_gemm_mhc"] = deep_gemm_mhc.__file__
+        result["versions"]["deepgemm_mega_mhc"] = deep_gemm_mhc.__version__
     return result
 
 

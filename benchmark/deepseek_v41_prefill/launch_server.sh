@@ -4,6 +4,10 @@ set -euo pipefail
 ulimit -c 0
 export PATH=/opt/sglang/bin:$PATH
 export PYTHONPATH=/repro/deps:/repro/source/python
+if [[ -d /repro/deepgemm521 ]]; then
+  export PYTHONPATH="/repro/deepgemm521:$PYTHONPATH"
+  export DG521_JIT_CACHE_DIR=/repro/cache/deepgemm521
+fi
 export SGLANG_CACHE_DIR=/repro/cache
 export SGLANG_OPT_DSV41_SM90=1
 export SGLANG_OPT_FP8_WO_A_GEMM=1
