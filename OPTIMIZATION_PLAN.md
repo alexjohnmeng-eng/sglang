@@ -806,3 +806,44 @@ Compared with this EP1 configuration, the EP8 recipe is +7.39% / +9.00%; these
 are deployment-configuration gains, not isolated attribution to one kernel.
 The complete verified result manifest is
 `repro/h20-final-isolation-validation/validation_summary.json`.
+
+### 2026-11-26 统一 DeepGEMM 源码（验证完成，保留本地实验分支）
+
+本地 `experiment/dsv41-h20-unified-deepgemm` 基于 `b1ae8c062ddf`。dense、SM90 MXFP4 MegaMoE、SM90 Mega mHC 已合成单个 `deep_gemm._C`，包名 `deep-gemm-h20==2.8.0+h20.5`。基于 #473 `724a799bd043`，移入 dense block32/WQB-RoPE/multicast 与 #521 `410ce17fb3cc` mHC；一个源码树、一个扩展、一个 JIT runtime。FlashInfer Python/cubin0.7.2、jit-cache0.7.2+cu130、Humming0.1.12 保持镜像版本。使用镜像 Python3.12.16/Torch2.14.1+cu130构建。
+
+新增 opt-in `SGLANG_OPT_DSV41_UNIFIED_DEEPGEMM`、单一挂载参数 `PREFILL_UNIFIED_DEEPGEMM_SITE`；启动拒绝与三个旧 DeepGEMM site 参数混用。`SGLANG_DG_CACHE_DIR` 指定独立缓存，manifest记录活跃模块、版本、扩展和JIT头文件哈希。完整单一源码补丁、pins、构建和测试脚本在 `benchmark/deepseek_v41_prefill/dependencies/unified/`，详细结果见其中 `VALIDATION.md`。
+
+本轮发现并修正了仅合并文件容易漏掉的兼容问题：#473 metadata的next_n/cluster布局不适合当前DSPARK5，故保留dense donor整套SM90 metadata/host/kernel/scheduler；pybind非grouped GEMM默认compiled_dims恢复空串以保持multicast选择；DG_DSV41_DENSE_MULTICAST门控CP8EP8专用tile，EP1/decode使用generic tile；MXFP4 MegaMoE逐调用PDL默认False，small-call强制PDL保持旧行为；SM90 mHC没有griddepcontrol wait/trigger，显式禁止继承dense全局PDL。没有临时修改全局PDL，不影响其他stream。修改C++头文件必须clean build；只重跑pip wheel可能复用旧host object。
+
+| 配置 | 工作负载 | 原组合本轮复测 tok/s | 统一版 tok/s | 差异 |
+| --- | --- | ---: | ---: | ---: |
+| CP8/EP8 | 65536输入，输出1 | 99,767.43 | 99,673.50 | -0.094% |
+| CP8/EP8 | 262144输入，输出1 | 97,579.60 | 97,664.47 | +0.087% |
+| CP8/EP1 | 65536输入，输出1 | 92,681.94 | 92,757.03 | +0.081% |
+| CP8/EP1 | 262144输入，输出1 | 89,408.52 | 89,401.75 | -0.008% |
+| DP8/EP8 | fake prefill64×65536，输出1024 | 10,000.11 | 10,027.33 | +0.272% |
+
+GSM8K全量1319题、4shot、temperature0、max_tokens2048、并发64：统一版CP8EP8 **1282/1319**、EP1 **1281/1319**、DP8EP8 **1282/1319**，请求错误均0。原CP8EP8和EP1组合本轮复测均1277/1319；历史分别1281/1282，原组合本身也存在并发批次下的计数变化，不将单次分差宣称为精度收益。DP8EP8历史验证1281/1319。decode精度为非PD、真实prefill、关闭acceptance模拟；效率为fake prefill、模拟acceptance4.5、warmup1/repeat3。prefill精确seed42 IDs、cache off、warmup10/repeat5，全部8rank GPU-only profiles。
+
+CP8EP8的64K/256K kernel名称、模板参数和调用次数与原组合完全一致。EP1恢复generic dense tile并保留paired-W2/Humming。DP8EP8保留Humming及pull通信：all-gather/reduce-scatter pull均1247次/rank，DeepGEMM累计70.156→70.117ms/rank、2784次调用不变；kernel sum包含同步和重叠，不能代替wall time。分拓扑profile报告在实验根目录 `profile-comparison-v5/`。
+
+算子验证：非均匀scale对image generic/donor dense逐元素一致；dense(PDL on)→mHC在更换输入和清空中间输出后eager/graph逐元素一致；metadata next_n1/2/4/5/6一致；8rank M8192、hidden5120、ih2304、E56/rank的MXFP4 MegaMoE在dense global PDL开启时仍与donor逐元素一致，独立参考diff约5.3e-5，finite/recv stats/graph replay全部通过。独立从GitHub获取base+单一补丁，所有最终源码哈希一致。
+
+测试SGLang tree `ab48f9269ab74ae4795d53f9d2da472cbd599866`，native tree `3aaa7dc59774f997e95b387c6f9b2a9697c90fe4`。wheel SHA256 `949e42dc8c024b3510c2c9d9d47fccc070d96b3584726369694852281d274b43`，唯一extension SHA256 `b8bd8d79f3c9a989927359b84bc9e693e14a7f8cdba2491210b743e512e922fb`。实验根目录 `/data1/fjmeng2/dsv41-runtime/repro/deepgemm-unified-20261126`；源码 `source/`，统一site `site-v5/`，主验证 `validation-v5/`，原组合复测 `control-repeat/`，最终汇总 `RESULTS.md`/`results-v5.json`。
+
+本轮是依赖/源码整合，吞吐基本持平，不作为新的吞吐优化收益提交。代码和脚本保留本地实验分支工作区，未commit、未合入perf/dsv41-h20、未推送远端。
+
+
+### 2026-11-26 统一 DeepGEMM 合入与三套脚本整理（WQB 融合关闭，按要求不重测）
+
+用户要求将统一源码工作合入本地 `perf/dsv41-h20`，只整理 CP8EP8、CP8EP1、DP8EP8 三套，不需要 DP8EP4；并明确本轮不重跑性能/profile/GSM8K。此指令适用于本次脚本与依赖整合提交，不改变后续性能优化的 GSM8K 验证要求。本次没有新的性能收益声明，也不推送远端。
+
+三套入口统一为 `benchmark/deepseek_v41_prefill/run_h20.sh {cp8ep8|cp8ep1|dp8ep8}`；完整环境、参数对照、依赖构建、吞吐/profile/GSM8K命令和产物位置在 `benchmark/deepseek_v41_prefill/H20_TESTING.md`。串行入口 `dependencies/unified/validate.sh` 复用同一套配置，旧 `validate_migration.sh` 在选择统一site时转入新入口。完整server launcher、bench.py、strict_decode.py、EvalScope调用、verify_gsm8k.py与统一DeepGEMM补丁/build/pins/算子检查脚本均随提交保存，不依赖临时修改或三个旧site。
+
+所有启动路径显式设置 `SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=0`，覆盖宿主机遗留值1。CP8EP8保留chunk262144、mem .74、64冗余专家和固定placement、16K MegaMoE工作区、dense multicast、mHC、Q8 TMA SWA；CP8EP1保留chunk65536、mem .84、paired-W2 40层、mHC，关闭EP8专用gate与dense multicast；DP8EP8保留TP8/attn-DP8/EP8、Humming、pull通信、mem .85、max-running256、decode graph32，关闭CP特性。三套共用 `deep-gemm-h20==2.8.0+h20.5`，FlashInfer仍为镜像0.7.2；拒绝三个旧DeepGEMM或FlashInfer overlay混用。
+
+DP8EP8吞吐使用decode角色、Mooncake配置和请求级 `bootstrap_host=2.2.2.2` fake handoff，不启动prefill端，不代表真实RDMA传输效率。默认64×65536输入、1024输出、acceptance4.5、warmup1/repeat3，另采8rank GPU-only profile；精度另启非PD、真实prefill、清除模拟环境变量。prefill为精确65536/262144 IDs、cache off、output1、warmup10/repeat5。完整GSM8K脚本仍为1319题、4shot、temperature0、max2048、并发64，但本次未执行。
+
+仅执行静态/无服务检查：shell语法、Python AST、ruff lint/format、isort、diff whitespace、统一native源码pins/site单扩展哈希；三套 `--prepare-only` 源码及工具导出、4个服务模式（CP8EP8/CP8EP1/DP8EP8 decode与accuracy）的命令展开均通过。验证强制WQB=0、DP规范化参数、精度服务无PD/无模拟、四种旧site冲突提前拒绝。未启动模型、未占用GPU、未运行数据集。
+
+静态检查产物：`/data1/fjmeng2/dsv41-runtime/repro/h20-wqb-off-script-review-20261126T143141Z/summary.json`，脚本哈希、逐拓扑命令预览和环境展开日志在同目录；检查时源码tree `555b6b47c7418090d502b70418ce8c172c8ba6b4`，随后只补充文档/日志。此前实测保留在 `deepgemm-unified-20261126/`，其CP8EP8使用WQB融合；历史成绩不能挪用为关闭后的成绩。

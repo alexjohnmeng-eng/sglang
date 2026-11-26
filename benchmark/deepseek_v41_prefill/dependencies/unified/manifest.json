@@ -1,0 +1,50 @@
+{
+  "base_repository": "https://github.com/deepseek-ai/DeepGEMM.git",
+  "base_revision": "724a799bd04382732df8ba73611b4a2702879ac6",
+  "source_tree": "3aaa7dc59774f997e95b387c6f9b2a9697c90fe4",
+  "submodules": {
+    "third-party/cutlass": "f3fde58372d33e9a5650ba7b80fc48b3b49d40c8",
+    "third-party/deep_jit": "e5bdee2bc4ca519eba00cfc5f0c6e950e6a96a16"
+  },
+  "version": "2.8.0+h20.5",
+  "distribution": "deep-gemm-h20",
+  "source_files_sha256": {
+    "H20_PROVENANCE.json": "ed80634143dfa8fdb516b757ee3170848d0bdd30c69b19c07c561863b707cacd",
+    "csrc/apis/attention.hpp": "5957ff91d415b8547908cb83f869e1fe4b03eca1cd1c94e9dab81b8ed31b194e",
+    "csrc/apis/config.hpp": "61b70480befeac43bd7a59bc07943867bb0864f21696c7ba5baff5b214deefcf",
+    "csrc/apis/einsum.hpp": "ae7571d06a8c53760dd256b4580c3f65671e4c01bd556f6f3bad123a1fae9a27",
+    "csrc/apis/gemm.hpp": "c8125bcb12d9bde8ca4fb764f09a3acfb01e5b8de322407b60cbf061463f4680",
+    "csrc/apis/h20.hpp": "790b28e50d4a0f5631e498e48510809ce1ac4da441ce6a68b91ea07d23a71a06",
+    "csrc/apis/layout.hpp": "7d6cbf256da8898da76e1a4676725117248fc2895a0adb065dddd267c9069304",
+    "csrc/apis/mega_mhc.hpp": "b69399a5f5e1377843bc1506e22419a26456d1529e883ef2bcc2e0e64bd6f989",
+    "csrc/apis/sm90_fused_mega.hpp": "797b973e8dbb782c3c0aee8919b8acf92cb8937400581f6ac06ce7bb08d2aa12",
+    "csrc/jit_kernels/heuristics/config.hpp": "d8d962e85efa14de8c8e91b759bd6d4a791aad2de74729e79fe315c605c5a0df",
+    "csrc/jit_kernels/heuristics/sm90.hpp": "34d7183daa8a193e405486c24aff33f8e483369d154cf6caf1998dc3d1c44cba",
+    "csrc/jit_kernels/heuristics/sm90_fused_mega_moe.hpp": "fa09d35522833321042fdabfeab9792c453eedb63e28185637ec8200efce5539",
+    "csrc/jit_kernels/impls/sm90_fp8_fused_mega_moe.hpp": "b0dea78fa5b1e0919d23c45e34b0695675b9f210cff9b6d817165098ce5c7be6",
+    "csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp": "6c5d38848ac5d8268f6e72aadcf6c5125e7a708d02b405387719115ce1290277",
+    "csrc/jit_kernels/impls/sm90_fp8_mqa_logits.hpp": "69cf9125c2580052b6819827d6747318616e65a1dffce6a69c2780675a1cad15",
+    "csrc/jit_kernels/impls/sm90_mega_mhc.hpp": "594a98ffb0c91a6921eb08e8633d140bea7b01983f4cfa450e47cbc24b6c564f",
+    "csrc/python_api.cpp": "bda8ebe59bb03f1a3b54bc8ea9cdceba393981afdfbe9cb40ebc0a2e22066ed6",
+    "deep_gemm/__init__.py": "0a16235f8659a2ceba8d6687d6857ac6ee658847eef2cd76e919120420890165",
+    "deep_gemm/include/deep_gemm/common/fp32x2.cuh": "23c18e70d3542705a2111bff3c12ce4d8a7bf192890d7021f3bbe3a9ecc33308",
+    "deep_gemm/include/deep_gemm/epilogue/sm100_mega_mhc.cuh": "a8d2c8b0c219fee5c99dda0856a0bbee70e87282397ffeb2a905cbbed49a692f",
+    "deep_gemm/include/deep_gemm/epilogue/sm90_mega_mhc.cuh": "4fa5556b1d1acbdbfb79eee9f10fec34fa870cf343aa949454185923f9a7b4d3",
+    "deep_gemm/include/deep_gemm/impls/sm90_fp8_gemm_1d2d.cuh": "2ad476c633f9ce976285173a501a456114f45fc27f001e63618fc2d8812e6287",
+    "deep_gemm/include/deep_gemm/impls/sm90_fp8_paged_mqa_logits.cuh": "99adfbe0ef9322756628c805d047fa572cf44494cdf25e5330376f0a2a5c33f9",
+    "deep_gemm/include/deep_gemm/impls/sm90_mega_mhc.cuh": "ca8189a0b2b9ce65238a773f6ca721e77daaf0385cb8599b747a4a269385ea3e",
+    "deep_gemm/include/deep_gemm/layout/mega_mhc.cuh": "a3e9c5334f53ef6be11e54cdaa0538f457177ec82284e86cbde29f31df064e5f",
+    "deep_gemm/include/deep_gemm/layout/sm90_mega_mhc.cuh": "b60a3d7d555b9e18d7f56291f50a2fba1cb7cf5f491b3127603b611027184a51",
+    "deep_gemm/include/deep_gemm/ptx/ld_st.cuh": "0914441da8b5323c428b85ff9934ec9c46c2ab9fc162ce5d91024248f2d53def",
+    "deep_gemm/include/deep_gemm/scheduler/mega_mhc.cuh": "66845f85cd938e3dfb089f6849ff1f38aafcbc46b801da66bad118732332fd56",
+    "deep_gemm/include/deep_gemm/scheduler/sm90_paged_mqa_logits.cuh": "9fcac09c81dc92860f427229a91cd573b26cd51b9249b9ceabc96ad0983e12cb",
+    "deep_gemm/mega/sm90_fused.py": "e2fcfedcb1354de8591747258ea0a3404416d054f7ab9dc8df128f3b03f23188",
+    "setup.py": "6cf1d8b3e5a2afecb3a18b200360454f1af5db514b8ffe3cbed1c9546871a5da"
+  },
+  "tested_wheel_sha256": {
+    "deep_gemm_h20-2.8.0+h20.5-cp312-cp312-linux_x86_64.whl": "949e42dc8c024b3510c2c9d9d47fccc070d96b3584726369694852281d274b43"
+  },
+  "tested_extension_sha256": {
+    "deep_gemm/_C.cpython-312-x86_64-linux-gnu.so": "b8bd8d79f3c9a989927359b84bc9e693e14a7f8cdba2491210b743e512e922fb"
+  }
+}

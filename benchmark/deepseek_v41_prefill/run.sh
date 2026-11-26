@@ -15,6 +15,12 @@ deps=${PREFILL_DEPS_DIR:-/data1/fjmeng2/dsv41-runtime/fa3-pylibs}
 cache=${PREFILL_CACHE_DIR:-/data1/fjmeng2/dsv41-runtime/sglang-cache-migrated}
 port=${PREFILL_PORT:-30002}
 container=${PREFILL_CONTAINER:-dsv41-prefill-$(date -u +%Y%m%dT%H%M%SZ)}
+# A unified site must never be combined with the three legacy module sites.
+if [[ -n "${PREFILL_UNIFIED_DEEPGEMM_SITE:-}" ]]; then
+  for legacy in PREFILL_DENSE_DEEPGEMM_SITE PREFILL_DEEPGEMM473_SITE PREFILL_DEEPGEMM521_SITE PREFILL_FLASHINFER_SITE; do
+    [[ -z "${!legacy:-}" ]] || { echo "Unified DeepGEMM conflicts with $legacy" >&2; exit 2; }
+  done
+fi
 mode=${1:-run}
 if [[ "$mode" != run && "$mode" != --prepare-only ]]; then
   echo "Usage: $0 [run|--prepare-only]; configuration: see README.md" >&2
@@ -86,7 +92,10 @@ device_args=()
 if [[ -d /dev/infiniband ]]; then
   device_args+=(--device /dev/infiniband:/dev/infiniband)
 fi
-experiment_args=(-e "SGLANG_EXPERIMENT_DSV41_Q8_TMA_SWA=${PREFILL_Q8_TMA_SWA:-0}")
+experiment_args=(
+  -e "SGLANG_EXPERIMENT_DSV41_Q8_TMA_SWA=${PREFILL_Q8_TMA_SWA:-0}"
+  -e SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=0
+)
 if [[ "${PREFILL_DENSE_MULTICAST:-0}" == 1 ]]; then
   experiment_args+=( -e DG_DSV41_DENSE_MULTICAST=1 )
 fi
@@ -96,6 +105,20 @@ if [[ -n "${PREFILL_EP_PLACEMENT:-}" ]]; then
 fi
 if [[ -n "${PREFILL_FLASHINFER_SITE:-}" ]]; then
   experiment_args+=( -v "$PREFILL_FLASHINFER_SITE:/repro/flashinfer:ro" )
+fi
+if [[ -n "${PREFILL_UNIFIED_DEEPGEMM_SITE:-}" ]]; then
+  [[ -f "$PREFILL_UNIFIED_DEEPGEMM_SITE/deep_gemm/__init__.py" ]] || { echo "Invalid unified DeepGEMM site" >&2; exit 2; }
+  experiment_args+=(
+    -v "$PREFILL_UNIFIED_DEEPGEMM_SITE:/repro/unified_deepgemm:ro"
+    -e SGLANG_OPT_DSV41_UNIFIED_DEEPGEMM=1
+    -e SGLANG_OPT_DSV41_MEGA_MHC_PREFILL=1
+  )
+  if [[ "${PREFILL_EP8_HISTORICAL:-0}" == 1 ]]; then
+    experiment_args+=(
+      -e SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM=1
+      -e "SGLANG_OPT_DSV41_SM90_MEGAMOE_16K_PREFILL=${PREFILL_DEEPGEMM473_16K:-0}"
+    )
+  fi
 fi
 if [[ -n "${PREFILL_DEEPGEMM473_SITE:-}" ]]; then
   experiment_args+=(
@@ -113,7 +136,6 @@ fi
 if [[ -n "${PREFILL_DENSE_DEEPGEMM_SITE:-}" ]]; then
   experiment_args+=(
     -v "$PREFILL_DENSE_DEEPGEMM_SITE:/repro/dense_deepgemm:ro"
-    -e "SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=${PREFILL_WQB_Q8_ROPE:-0}"
   )
 fi
 if [[ "${PREFILL_RUN_GSM8K:-0}" == 1 ]]; then

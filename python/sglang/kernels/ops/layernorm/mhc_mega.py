@@ -6,6 +6,7 @@ https://github.com/deepseek-ai/DeepGEMM
 
 import torch
 
+from sglang.srt.environ import envs
 from sglang.srt.utils import is_cuda
 
 if is_cuda():
@@ -52,7 +53,13 @@ def mhc_mega_boundary(
     if moe_input is not None:
         assert y_fp8 is None
         y_fp8, y_routed_sf, y_shared_sf, shared_sf_block_m = moe_input
-    if sm90:
+    if sm90 and envs.SGLANG_OPT_DSV41_UNIFIED_DEEPGEMM.get():
+        if not getattr(deep_gemm, "__h20_unified__", False):
+            raise RuntimeError(
+                "Unified DeepGEMM requested but the H20 build is not loaded"
+            )
+        mega_mhc = deep_gemm.mega_mhc
+    elif sm90:
         from deep_gemm_mhc import mega_mhc
     else:
         mega_mhc = deep_gemm.mega_mhc

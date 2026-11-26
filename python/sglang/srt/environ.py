@@ -2126,6 +2126,8 @@ class Envs:
     SGLANG_ENABLE_DSV41_ENGRAM_HOST_TABLE = EnvBool(False)
     SGLANG_DSV41_ENGRAM_HOST_TABLE_LAYOUT = EnvStr("shared")
     SGLANG_OPT_ENGRAM_EXTEND_HASH = EnvBool(False)
+    # One locally built DeepGEMM module for SM90 dense, MegaMoE and mHC.
+    SGLANG_OPT_DSV41_UNIFIED_DEEPGEMM = EnvBool(False)
     SGLANG_OPT_DSV41_MEGA_MHC_PREFILL = EnvBool(False)
     # Scheduler-side staging of shared host-table rows on GPUs without ATS
     # (engram_staging.py); pays off for large prefill batches.

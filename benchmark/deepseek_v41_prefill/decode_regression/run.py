@@ -18,6 +18,11 @@ parser.add_argument("--revision", default="HEAD")
 parser.add_argument("--baseline", default="82bebb1d34")
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument(
+    "--prepare-only",
+    action="store_true",
+    help="Export source/tools/manifests only; do not query GPUs or start a server",
+)
+parser.add_argument(
     "--runtime", type=Path, default=Path("/data1/fjmeng2/dsv41-runtime")
 )
 parser.add_argument(
@@ -26,6 +31,11 @@ parser.add_argument(
     choices=["control", "candidate", "accuracy"],
     default=["control", "candidate", "accuracy"],
     help="Cases to run, in order; accuracy uses real prefill without simulation",
+)
+parser.add_argument(
+    "--unified-deepgemm-site",
+    type=Path,
+    help="Use the single H20 wheel for candidate and accuracy; control uses the image",
 )
 args = parser.parse_args()
 assets = Path(__file__).resolve().parent
@@ -36,13 +46,31 @@ repo = Path(
 )
 args.output = args.output.resolve()
 args.output.mkdir(parents=True, exist_ok=False)
+(args.output / "recipe.json").write_text(
+    json.dumps(
+        {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
+        indent=2,
+    )
+    + "\n"
+)
 image = "sha256:f3a303d4028dc4597e312c96ada28fa19509f46559601a94e89dc630ac1ef152"
-if subprocess.check_output(
-    ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"], text=True
-).strip():
-    raise RuntimeError("GPUs occupied")
-with socket.socket() as sock:
-    sock.bind(("0.0.0.0", 8089))
+if args.unified_deepgemm_site:
+    subprocess.run(
+        [
+            "python3",
+            str(assets.parent / "dependencies/unified/verify.py"),
+            "site",
+            str(args.unified_deepgemm_site.resolve()),
+        ],
+        check=True,
+    )
+if not args.prepare_only:
+    if subprocess.check_output(
+        ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"], text=True
+    ).strip():
+        raise RuntimeError("GPUs occupied")
+    with socket.socket() as sock:
+        sock.bind(("0.0.0.0", 8089))
 
 
 def run(command, **kwargs):
@@ -105,6 +133,9 @@ for name in args.cases:
     for script in ("manifest.py", "verify_gsm8k.py"):
         shutil.copy2(assets.parent / script, tools / script)
     run(["python3", str(tools / "manifest.py"), "source", str(root), tree])
+    if args.prepare_only:
+        print("Prepared isolated source and tools:", root, flush=True)
+        continue
     container = "dsv41-dp8ep8-audit-" + name + "-" + str(int(time.time()))
     command = [
         "docker",
@@ -129,6 +160,16 @@ for name in args.cases:
         "-e",
         "DECODE_MODE=" + mode,
     ]
+    if args.unified_deepgemm_site and name != "control":
+        site = args.unified_deepgemm_site.resolve()
+        if not (site / "deep_gemm/__init__.py").is_file():
+            raise RuntimeError(f"Invalid unified DeepGEMM site: {site}")
+        command += [
+            "-v",
+            str(site) + ":/repro/unified_deepgemm:ro",
+            "-e",
+            "SGLANG_OPT_DSV41_UNIFIED_DEEPGEMM=1",
+        ]
     if Path("/dev/infiniband").is_dir():
         command += ["--device", "/dev/infiniband:/dev/infiniband"]
     for host, target in [

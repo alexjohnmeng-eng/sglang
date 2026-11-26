@@ -1,5 +1,11 @@
 # Historical H20 prefill migration
 
+For the current single-source DeepGEMM and complete CP8EP8/CP8EP1/DP8EP8 scripts,
+use [H20_TESTING.md](H20_TESTING.md). The reviewed recipes explicitly disable
+WQB/RoPE/FP8 fusion on all three topologies. The results and separate dependency
+sites below describe earlier experiments; the script update was not rebenchmarked
+or reevaluated, as requested by the user.
+
 The integration retains EP1 paired-W2/mHC and enables the historical EP8 path
 only with `SGLANG_OPT_DSV41_CP8_EP8_PREFILL=1`, attention-CP8, MoE-EP8,
 attention-DP1 and attention-TP1. Normal attention-DP8 decode cannot enter it.

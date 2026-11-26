@@ -7,6 +7,7 @@ the conversion can be validated without changing the online Humming runner.
 
 from __future__ import annotations
 
+import importlib
 import logging
 from dataclasses import replace
 from typing import Optional
@@ -36,12 +37,22 @@ def _use_deepgemm() -> bool:
     return envs.SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM.get()
 
 
+def _deepgemm_module():
+    unified = envs.SGLANG_OPT_DSV41_UNIFIED_DEEPGEMM.get()
+    module = importlib.import_module("deep_gemm" if unified else "deep_gemm_mega")
+    if unified and not getattr(module, "__h20_unified__", False):
+        raise RuntimeError(
+            "Unified DeepGEMM requested but the active deep_gemm is not the H20 build"
+        )
+    return module
+
+
 def available() -> bool:
     if not enabled() or get_device_sm() != 90:
         return False
     try:
         if _use_deepgemm():
-            import deep_gemm_mega  # noqa: F401
+            _deepgemm_module()
         else:
             import flashinfer.megamoe  # noqa: F401
     except ImportError:
@@ -114,12 +125,10 @@ def prepare_layer(layer: torch.nn.Module) -> bool:
             )
             return False
         if _use_deepgemm():
-            from deep_gemm_mega import (
-                transform_weights_for_fp8_mxfp4_fused_mega_moe_sm90,
-            )
-
-            transformed = transform_weights_for_fp8_mxfp4_fused_mega_moe_sm90(
-                (w13, w13_scale), (w2, w2_scale), layout="tiled"
+            transformed = (
+                _deepgemm_module().transform_weights_for_fp8_mxfp4_fused_mega_moe_sm90(
+                    (w13, w13_scale), (w2, w2_scale), layout="tiled"
+                )
             )
         else:
             from flashinfer.megamoe import transform_mxfp4_weights_for_mega_moe
@@ -157,9 +166,7 @@ def _get_buffer(capacity: int, num_experts: int):
     buffer = _BUFFERS.get(key)
     if buffer is None:
         if _use_deepgemm():
-            from deep_gemm_mega import get_symm_buffer_for_sm90_mega_moe
-
-            buffer = get_symm_buffer_for_sm90_mega_moe(
+            buffer = _deepgemm_module().get_symm_buffer_for_sm90_mega_moe(
                 group, num_experts, capacity, 6, 5120, 2304, fused=True
             )
         else:
@@ -249,7 +256,7 @@ def run_global_ids(
     ids = topk_ids.to(torch.int64)
     route_weights = topk_weights.float().contiguous()
     if _use_deepgemm():
-        from deep_gemm_mega import fp8_mxfp4_mega_moe
+        fp8_mxfp4_mega_moe = _deepgemm_module().fp8_mxfp4_mega_moe
 
         for offset in range(0, num_tokens, capacity):
             part = slice(offset, min(offset + capacity, num_tokens))

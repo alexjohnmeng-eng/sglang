@@ -18,6 +18,13 @@ if [[ -d /repro/deepgemm521 ]]; then
   export PYTHONPATH="/repro/deepgemm521:$PYTHONPATH"
   export DG521_JIT_CACHE_DIR=/repro/cache/deepgemm521
 fi
+if [[ "${SGLANG_OPT_DSV41_UNIFIED_DEEPGEMM:-0}" == 1 ]]; then
+  export PYTHONPATH="/repro/unified_deepgemm:$PYTHONPATH"
+  # SGLang compile_utils overwrites DG_JIT_CACHE_DIR from this variable.
+  export SGLANG_DG_CACHE_DIR=/repro/cache/deepgemm-h20-unified
+  export DG_JIT_CACHE_DIR="$SGLANG_DG_CACHE_DIR"
+fi
+export SGLANG_ENCODER_IMAGE_PROCESSOR_USE_GPU=1
 export SGLANG_CACHE_DIR=/repro/cache
 export SGLANG_OPT_DSV41_SM90=1
 if [[ "${PREFILL_EP8_HISTORICAL:-0}" == 1 ]]; then
@@ -26,6 +33,7 @@ if [[ "${PREFILL_EP8_HISTORICAL:-0}" == 1 ]]; then
   export SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN=1
   export SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS=8192
 else
+  export SGLANG_OPT_DSV41_CP8_EP8_PREFILL=0
   unset SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN
   unset SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS
 fi
@@ -39,8 +47,9 @@ export PYTHONUNBUFFERED=1
 export SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND=python
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export SGLANG_DSV41_HUMMING_PREFILL_NTAIL="${PREFILL_HUMMING_NTAIL:-0}"
+# Disabled for the reviewed H20 recipes, including when inherited as 1.
+export SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=0
 
-python3 /repro/tools/manifest.py runtime /repro/results
 command=(python3 -m sglang.launch_server
   --model-path /models/DeepSeek-V4.1-Flash-1017
   --served-model-name DeepSeek-V4.1-Flash
@@ -61,6 +70,12 @@ fi
 if [[ "${PREFILL_ATTENTION_BACKEND:-auto}" != auto ]]; then
   command+=(--dsv4-prefill-backend "$PREFILL_ATTENTION_BACKEND")
 fi
+if [[ "${H20_PRINT_LAUNCH:-0}" == 1 ]]; then
+  printf '%q ' "${command[@]}"
+  printf '\n'
+  exit 0
+fi
+python3 /repro/tools/manifest.py runtime /repro/results
 printf '%q ' "${command[@]}" > /repro/results/launch_command.txt
 printf '\n' >> /repro/results/launch_command.txt
 exec "${command[@]}"

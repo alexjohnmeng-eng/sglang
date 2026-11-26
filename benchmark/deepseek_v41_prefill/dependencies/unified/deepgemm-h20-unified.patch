@@ -1,0 +1,2453 @@
+diff --git a/H20_PROVENANCE.json b/H20_PROVENANCE.json
+new file mode 100644
+index 0000000..5d68936
+--- /dev/null
++++ b/H20_PROVENANCE.json
+@@ -0,0 +1,82 @@
++{
++  "base": "724a799bd04382732df8ba73611b4a2702879ac6",
++  "copied_files": {
++    "csrc/jit_kernels/heuristics/sm90_fused_mega_moe.hpp": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-20261124/upstream-20261125/DeepGEMM-473-prefill-tuning",
++      "sha256": "fa09d35522833321042fdabfeab9792c453eedb63e28185637ec8200efce5539"
++    },
++    "csrc/jit_kernels/heuristics/sm90.hpp": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/dense-multicast/DeepGEMM",
++      "sha256": "ef3ec998995ebf461d0580dd307a11d6af8511b2cec4b1f56634a9389c7e4d57"
++    },
++    "csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/dense-multicast/DeepGEMM",
++      "sha256": "6c5d38848ac5d8268f6e72aadcf6c5125e7a708d02b405387719115ce1290277"
++    },
++    "deep_gemm/include/deep_gemm/impls/sm90_fp8_gemm_1d2d.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/dense-multicast/DeepGEMM",
++      "sha256": "2ad476c633f9ce976285173a501a456114f45fc27f001e63618fc2d8812e6287"
++    },
++    "csrc/apis/mega_mhc.hpp": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/src",
++      "sha256": "b69399a5f5e1377843bc1506e22419a26456d1529e883ef2bcc2e0e64bd6f989"
++    },
++    "csrc/jit_kernels/impls/sm90_mega_mhc.hpp": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/src",
++      "sha256": "2de59355415d71a8f2da77de82b82575b0b02b923e69badb8030ef9be65faf6f"
++    },
++    "deep_gemm/include/deep_gemm/layout/sm90_mega_mhc.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/src",
++      "sha256": "b60a3d7d555b9e18d7f56291f50a2fba1cb7cf5f491b3127603b611027184a51"
++    },
++    "deep_gemm/include/deep_gemm/layout/mega_mhc.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/src",
++      "sha256": "a3e9c5334f53ef6be11e54cdaa0538f457177ec82284e86cbde29f31df064e5f"
++    },
++    "deep_gemm/include/deep_gemm/impls/sm90_mega_mhc.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/src",
++      "sha256": "ca8189a0b2b9ce65238a773f6ca721e77daaf0385cb8599b747a4a269385ea3e"
++    },
++    "deep_gemm/include/deep_gemm/epilogue/sm90_mega_mhc.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/src",
++      "sha256": "4fa5556b1d1acbdbfb79eee9f10fec34fa870cf343aa949454185923f9a7b4d3"
++    },
++    "deep_gemm/include/deep_gemm/epilogue/sm100_mega_mhc.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/src",
++      "sha256": "a8d2c8b0c219fee5c99dda0856a0bbee70e87282397ffeb2a905cbbed49a692f"
++    },
++    "deep_gemm/include/deep_gemm/scheduler/mega_mhc.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/src",
++      "sha256": "66845f85cd938e3dfb089f6849ff1f38aafcbc46b801da66bad118732332fd56"
++    },
++    "deep_gemm/include/deep_gemm/common/fp32x2.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/src",
++      "sha256": "23c18e70d3542705a2111bff3c12ce4d8a7bf192890d7021f3bbe3a9ecc33308"
++    },
++    "deep_gemm/include/deep_gemm/ptx/ld_st.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/src",
++      "sha256": "9349f8b9e921d538c49de9669dfebb07b7d9472a7f2d9237d9b00466eeb507f5"
++    },
++    "csrc/jit_kernels/impls/sm90_fp8_mqa_logits.hpp": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/dense-multicast/DeepGEMM",
++      "sha256": "69cf9125c2580052b6819827d6747318616e65a1dffce6a69c2780675a1cad15"
++    },
++    "deep_gemm/include/deep_gemm/impls/sm90_fp8_paged_mqa_logits.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/dense-multicast/DeepGEMM",
++      "sha256": "99adfbe0ef9322756628c805d047fa572cf44494cdf25e5330376f0a2a5c33f9"
++    },
++    "deep_gemm/include/deep_gemm/scheduler/sm90_paged_mqa_logits.cuh": {
++      "donor": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/dense-multicast/DeepGEMM",
++      "sha256": "9fcac09c81dc92860f427229a91cd573b26cd51b9249b9ceabc96ad0983e12cb"
++    }
++  },
++  "version": "2.8.0+h20.5",
++  "integration_notes": [
++    "ptx/ld_st.cuh retains all #473 MegaMoE helpers and adds the #521 mHC helpers; donor hash describes the pre-merge file.",
++    "SM90 paged MQA host/kernel/scheduler and metadata atom layout retain the validated dense donor contract, not #473 cluster-next4 assumptions; preserves SGLang DSPARK5 metadata.",
++    "Non-grouped GEMM compiled_dims defaults preserve the dense donor empty-string contract, including its multicast heuristic.",
++    "The DG_DSV41_DENSE_MULTICAST switch gates CP8EP8-specific forced tiles/multicast so EP1/decode retain generic tile selection.",
++    "MXFP4 MegaMoE has a per-call pdl override (default False, small calls still force PDL); dense global PDL no longer changes the isolated donor policy.",
++    "SM90 mHC explicitly launches with PDL disabled: its kernel has no griddepcontrol wait/trigger and must not inherit dense global PDL."
++  ]
++}
+diff --git a/csrc/apis/attention.hpp b/csrc/apis/attention.hpp
+index d236ea4..e467876 100644
+--- a/csrc/apis/attention.hpp
++++ b/csrc/apis/attention.hpp
+@@ -484 +484 @@ static torch::Tensor get_paged_mqa_logits_metadata(const torch::Tensor& context_
+-    // num_sms is the scheduler slot count: callers pre-divide by 2 for SM90 next_n=4.
++    // Preserve the dense donor SM90 query-atom metadata contract (including DSPARK5).
+@@ -516 +516 @@ static torch::Tensor get_paged_mqa_logits_metadata(const torch::Tensor& context_
+-        DG_HOST_ASSERT(next_n == 1 or next_n == 2 or next_n == 4);
++        DG_HOST_ASSERT(next_n >= 1);
+@@ -518 +518 @@ static torch::Tensor get_paged_mqa_logits_metadata(const torch::Tensor& context_
+-        sm90_paged_mqa_logits_metadata(context_lens, schedule_metadata, batch_size, next_n, 64, num_sms, is_context_lens_2d, false, nullptr);
++        sm90_paged_mqa_logits_metadata(context_lens, schedule_metadata, batch_size, next_n, block_kv, num_sms, is_context_lens_2d, false, nullptr);
+@@ -619 +619 @@ static torch::Tensor fp8_fp4_paged_mqa_logits(const std::tuple<torch::Tensor, st
+-    const int num_ctas_per_cluster = (arch_major == 9 and next_n == 4) ? 2 : 1;
++    const int num_ctas_per_cluster = 1;
+@@ -635 +635 @@ static torch::Tensor fp8_fp4_paged_mqa_logits(const std::tuple<torch::Tensor, st
+-        DG_HOST_ASSERT(next_n == 1 or next_n == 2 or next_n == 4);
++        DG_HOST_ASSERT(next_n >= 1);
+diff --git a/csrc/apis/config.hpp b/csrc/apis/config.hpp
+index a0a6dd7..aed9106 100644
+--- a/csrc/apis/config.hpp
++++ b/csrc/apis/config.hpp
+@@ -11,0 +12,3 @@ static void register_apis(pybind11::module_& m) {
++    m.def("shutdown", []() {
++        runtime = deep_jit::LazyInit<Runtime>(nullptr);
++    });
+diff --git a/csrc/apis/einsum.hpp b/csrc/apis/einsum.hpp
+index 8863495..58ce6c3 100644
+--- a/csrc/apis/einsum.hpp
++++ b/csrc/apis/einsum.hpp
+@@ -401,2 +401,2 @@ static void fp8_bmm(const torch::Tensor& a, const torch::Tensor& sfa,
+-        DG_HOST_ASSERT(gran_k_a == 128 and gran_k_b == 128);
+-        sm90_fp8_bmm(a, transformed_sfa, b, transformed_sfb, c, d_tensor, batch_size, m, n, k, major_a, major_b, major_sfb, compiled_dims);
++        DG_HOST_ASSERT(gran_k_a == gran_k_b and (gran_k_a == 128 or gran_k_a == 32));
++        sm90_fp8_bmm(a, transformed_sfa, b, transformed_sfb, c, d_tensor, batch_size, m, n, k, major_a, major_b, major_sfb, compiled_dims, gran_k_a);
+diff --git a/csrc/apis/gemm.hpp b/csrc/apis/gemm.hpp
+index e7ddd58..300ea80 100644
+--- a/csrc/apis/gemm.hpp
++++ b/csrc/apis/gemm.hpp
+@@ -166 +166 @@ static void fp8_fp4_gemm_nt(const std::pair<torch::Tensor, torch::Tensor>& a,
+-            sm90_fp8_gemm_1d2d(a.first, sfa, b.first, sfb, c, d, m, n, k, major_a, major_b, major_sfb, compiled_dims);
++            sm90_fp8_gemm_1d2d(a.first, sfa, b.first, sfb, c, d, m, n, k, major_a, major_b, major_sfb, compiled_dims, std::nullopt, gran_k_a);
+@@ -998 +998 @@ static void register_apis(pybind11::module_& m) {
+-          py::arg("compiled_dims") = "nk",
++          py::arg("compiled_dims") = "",
+@@ -1005 +1005 @@ static void register_apis(pybind11::module_& m) {
+-          py::arg("compiled_dims") = "nk",
++          py::arg("compiled_dims") = "",
+@@ -1012 +1012 @@ static void register_apis(pybind11::module_& m) {
+-          py::arg("compiled_dims") = "mn",
++          py::arg("compiled_dims") = "",
+@@ -1019 +1019 @@ static void register_apis(pybind11::module_& m) {
+-          py::arg("compiled_dims") = "mn",
++          py::arg("compiled_dims") = "",
+@@ -1081 +1081 @@ static void register_apis(pybind11::module_& m) {
+-          py::arg("compiled_dims") = "nk",
++          py::arg("compiled_dims") = "",
+@@ -1086 +1086 @@ static void register_apis(pybind11::module_& m) {
+-          py::arg("compiled_dims") = "nk",
++          py::arg("compiled_dims") = "",
+@@ -1091 +1091 @@ static void register_apis(pybind11::module_& m) {
+-          py::arg("compiled_dims") = "mn",
++          py::arg("compiled_dims") = "",
+@@ -1096 +1096 @@ static void register_apis(pybind11::module_& m) {
+-          py::arg("compiled_dims") = "mn",
++          py::arg("compiled_dims") = "",
+diff --git a/csrc/apis/h20.hpp b/csrc/apis/h20.hpp
+new file mode 100644
+index 0000000..9783095
+--- /dev/null
++++ b/csrc/apis/h20.hpp
+@@ -0,0 +1,37 @@
++#pragma once
++#include <torch/library.h>
++namespace deep_gemm::h20 {
++using torch::Tensor;
++void dg_dsv41_wqb_q8_rope(const Tensor& a, const Tensor& a_sf, const Tensor& b, const Tensor& b_sf,
++                         const Tensor& d, const Tensor& positions, const Tensor& freqs) {
++    const int m = static_cast<int>(a.size(0));
++    constexpr int n = 32768, k = 1280;
++    DG_HOST_ASSERT(jit->device.get_arch_major() == 9 and m >= 8192 and m % 256 == 0);
++    DG_HOST_ASSERT(a.sizes() == at::IntArrayRef({m, k}) and b.sizes() == at::IntArrayRef({n, k}));
++    DG_HOST_ASSERT(d.sizes() == at::IntArrayRef({m, n}) and d.is_contiguous());
++    DG_HOST_ASSERT(positions.sizes() == at::IntArrayRef({m}) and positions.scalar_type() == torch::kInt64);
++    DG_HOST_ASSERT(freqs.dim() == 2 and freqs.size(1) == 64 and freqs.scalar_type() == torch::kFloat);
++    for (const auto* t : {&a, &a_sf, &b, &b_sf, &d, &positions, &freqs})
++        DG_HOST_ASSERT(t->is_cuda() and t->device() == a.device());
++    DG_HOST_ASSERT(positions.is_contiguous() and freqs.is_contiguous());
++    DG_HOST_ASSERT(a.scalar_type() == torch::kFloat8_e4m3fn and b.scalar_type() == a.scalar_type());
++    std::optional<std::tuple<int, int, int>> recipe = std::make_tuple(1, 32, 32);
++    std::optional<std::tuple<int, int>> recipe_a, recipe_b;
++    const auto [sfa, sfb, gran_k_a, gran_k_b] = layout::transform_sf_pair_into_required_layout(
++        a_sf, b_sf, m, n, k, recipe, recipe_a, recipe_b, std::nullopt, std::nullopt, false);
++    const auto major_a = get_major_type_ab(a);
++    const auto major_b = get_major_type_ab(b);
++    sm90_fp8_gemm_1d2d(a, sfa, b, sfb, std::nullopt, d, m, n, k, major_a, major_b,
++                       get_major_type_ab(sfb), "", std::nullopt, 32, &positions, &freqs);
++}
++
++static void register_apis(pybind11::module_& m) {
++    m.def("dsv41_wqb_q8_rope", &dg_dsv41_wqb_q8_rope);
++}
++} // namespace deep_gemm::h20
++TORCH_LIBRARY_FRAGMENT(deep_gemm, ops) {
++    ops.def("dsv41_wqb_q8_rope(Tensor a, Tensor a_sf, Tensor b, Tensor b_sf, Tensor(a!) d, Tensor positions, Tensor freqs) -> ()");
++}
++TORCH_LIBRARY_IMPL(deep_gemm, CUDA, ops) {
++    ops.impl("dsv41_wqb_q8_rope", &deep_gemm::h20::dg_dsv41_wqb_q8_rope);
++}
+diff --git a/csrc/apis/layout.hpp b/csrc/apis/layout.hpp
+index 1a50b7c..ef6ad54 100644
+--- a/csrc/apis/layout.hpp
++++ b/csrc/apis/layout.hpp
+@@ -62 +62 @@ static torch::Tensor transform_sf_into_required_layout(const torch::Tensor& sf,
+-    if (sf.scalar_type() == torch::kFloat and gran_mn == 1 and gran_k == 128 and (arch_major == 9 or disable_ue8m0_cast))
++    if (sf.scalar_type() == torch::kFloat and gran_mn == 1 and (gran_k == 128 or gran_k == 32) and (arch_major == 9 or disable_ue8m0_cast))
+@@ -66 +66 @@ static torch::Tensor transform_sf_into_required_layout(const torch::Tensor& sf,
+-    if (sf.scalar_type() == torch::kFloat and gran_mn == 128 and gran_k == 128 and (arch_major == 9 or disable_ue8m0_cast))
++    if (sf.scalar_type() == torch::kFloat and ((gran_mn == 128 and gran_k == 128) or (gran_mn == 32 and gran_k == 32)) and (arch_major == 9 or disable_ue8m0_cast))
+diff --git a/csrc/apis/mega_mhc.hpp b/csrc/apis/mega_mhc.hpp
+index 1cbc0c8..2f907ea 100644
+--- a/csrc/apis/mega_mhc.hpp
++++ b/csrc/apis/mega_mhc.hpp
+@@ -8,0 +9 @@
++#include "../jit_kernels/impls/sm90_mega_mhc.hpp"
+@@ -15 +16,2 @@ namespace mhc_layout = layout::mega_mhc;
+-static uint32_t get_num_splits(const uint32_t num_m_blocks, const uint32_t hidden, const uint32_t num_sms) {
++static uint32_t get_num_splits(const uint32_t num_m_blocks, const uint32_t hidden, const uint32_t num_sms,
++                               const int arch_major, const bool use_decode_mix) {
+@@ -18,0 +21,2 @@ static uint32_t get_num_splits(const uint32_t num_m_blocks, const uint32_t hidde
++    // Hopper amortizes persistent task and partial-reduction costs with fewer splits.
++    const uint32_t min_num_splits = arch_major == 9 ? 4u : mhc_layout::kDefaultNumSplits;
+@@ -20,0 +25,2 @@ static uint32_t get_num_splits(const uint32_t num_m_blocks, const uint32_t hidde
++    const uint32_t split_cap = arch_major == 9 and use_decode_mix
++        ? mhc_layout::kNumMaxSM90Splits : mhc_layout::kNumMaxSplits;
+@@ -22 +28 @@ static uint32_t get_num_splits(const uint32_t num_m_blocks, const uint32_t hidde
+-        mhc_layout::kNumMaxSplits, cute::max(mhc_layout::kDefaultNumSplits, num_sms / num_m_blocks));
++        split_cap, cute::max(min_num_splits, num_sms / num_m_blocks));
+@@ -223 +229,2 @@ static void mega_mhc(const torch::Tensor& x,
+-    DG_HOST_ASSERT(jit->device.get_arch_major() == 10);
++    const auto arch_major = jit->device.get_arch_major();
++    DG_HOST_ASSERT(arch_major == 9 or arch_major == 10);
+@@ -226 +233,3 @@ static void mega_mhc(const torch::Tensor& x,
+-    const auto num_splits = get_num_splits(num_m_blocks, static_cast<uint32_t>(hidden), static_cast<uint32_t>(num_sms));
++    const bool use_decode_mix = is_shifted and num_tokens >= 16 and num_tokens <= mhc_layout::BLOCK_M;
++    const auto num_splits = get_num_splits(num_m_blocks, static_cast<uint32_t>(hidden), static_cast<uint32_t>(num_sms),
++                                         arch_major, use_decode_mix);
+@@ -230,0 +240,6 @@ static void mega_mhc(const torch::Tensor& x,
++    // SM90 owns barriers per invocation, including graph nodes. Concurrent graphs
++    // captured on one stream must not share mutable synchronization state (#503).
++    const auto split_barriers = arch_major == 9
++        ? torch::empty({mhc_layout::kNumSplitBarriers, mhc_layout::kNumMaxMBlocks,
++                        mhc_layout::kSplitBarrierLineBytes}, x.options().dtype(torch::kByte))
++        : get_split_barriers(x.options());
+@@ -233 +248,7 @@ static void mega_mhc(const torch::Tensor& x,
+-    const auto& split_barriers = get_split_barriers(x.options());
++    // CUDA graph replays reuse grid IDs. Clear this launch's active barrier lines
++    // before independent consumers can observe a previous terminal tag.
++    if (arch_major == 9)
++        DG_CUDA_RUNTIME_CHECK(cudaMemset2DAsync(
++            split_barriers.data_ptr(), mhc_layout::kNumMaxMBlocks * mhc_layout::kSplitBarrierLineBytes,
++            0, num_m_blocks * mhc_layout::kSplitBarrierLineBytes, mhc_layout::kNumSplitBarriers,
++            at::cuda::getCurrentCUDAStream()));
+@@ -243 +264,2 @@ static void mega_mhc(const torch::Tensor& x,
+-    sm100_mega_mhc(
++    const auto launch = arch_major == 9 ? sm90_mega_mhc : sm100_mega_mhc;
++    launch(
+diff --git a/csrc/apis/sm90_fused_mega.hpp b/csrc/apis/sm90_fused_mega.hpp
+index c067f89..6f321b8 100644
+--- a/csrc/apis/sm90_fused_mega.hpp
++++ b/csrc/apis/sm90_fused_mega.hpp
+@@ -313 +313,2 @@ static void sm90_fused_fp8_mxfp4_mega_moe(
+-    const bool& split_k_hint
++    const bool& split_k_hint,
++    const std::optional<bool>& pdl_override
+@@ -411 +412 @@ static void sm90_fused_fp8_mxfp4_mega_moe(
+-                            std::make_tuple(l1_sfb, l1_secondary, l2_sfb, l2_secondary), split_k_hint);
++                            std::make_tuple(l1_sfb, l1_secondary, l2_sfb, l2_secondary), split_k_hint, pdl_override);
+diff --git a/csrc/jit_kernels/heuristics/config.hpp b/csrc/jit_kernels/heuristics/config.hpp
+index a2dc769..afd87e8 100644
+--- a/csrc/jit_kernels/heuristics/config.hpp
++++ b/csrc/jit_kernels/heuristics/config.hpp
+@@ -26,0 +27 @@ struct GemmDesc {
++    int max_gran_k = 128;
+diff --git a/csrc/jit_kernels/heuristics/sm90.hpp b/csrc/jit_kernels/heuristics/sm90.hpp
+index 144bfd1..b71e701 100644
+--- a/csrc/jit_kernels/heuristics/sm90.hpp
++++ b/csrc/jit_kernels/heuristics/sm90.hpp
+@@ -2,0 +3,2 @@
++#include "../../runtime/runtime.hpp"
++
+@@ -15 +16,0 @@ struct SM90ArchSpec {
+-
+@@ -16,0 +18,18 @@ struct SM90ArchSpec {
++        constexpr int short_k_stages = 8;
++        // Block K is fixed by the MMA operand width.
++        const int block_k = 128 * 8 / get_num_element_bits(desc.get_mma_kind());
++        const bool block32 = desc.kernel_type == KernelType::Kernel1D2D and desc.max_gran_k == 32;
++        const int n_tile_multiple = block32 ? desc.max_gran_k : 16;
++        const int max_1d2d_block_n = block32 ? block_k : 192;
++        const int short_k = short_k_stages * block_k;
++        const int max_block_m = desc.k <= short_k ? 2 * block_k : block_k;
++        const bool allow_small_m = not block32 or desc.k <= 2 * short_k;
++
++        const bool h20_prefill_tuning = deep_jit::get_env<int>("DG_DSV41_DENSE_MULTICAST", 0) != 0;
++        const bool tuned_projection = (desc.n == 32768 && desc.k == 1280) ||
++                                      (desc.n == 4608 && desc.k == 5120);
++        const int forced_tile_m = h20_prefill_tuning && block32 && desc.m == 8192 && tuned_projection &&
++                desc.num_sms == 78 && desc.gemm_type == GemmType::Normal &&
++                desc.cd_dtype == torch::kBFloat16
++            ? 256 : 0;
++
+@@ -25,2 +44,2 @@ struct SM90ArchSpec {
+-            if (desc.m <= 16) block_m_candidates.push_back(16);
+-            if (desc.m <= 32) block_m_candidates.push_back(32);
++            if (desc.m <= 16 and allow_small_m) block_m_candidates.push_back(16);
++            if (desc.m <= 32 and allow_small_m) block_m_candidates.push_back(32);
+@@ -40 +59 @@ struct SM90ArchSpec {
+-        int step = std::lcm(16, heuristics_runtime->get_block_n_multiple_of());
++        int step = std::lcm(n_tile_multiple, heuristics_runtime->get_block_n_multiple_of());
+@@ -52 +71 @@ struct SM90ArchSpec {
+-            end = 192;
++            end = max_1d2d_block_n;
+@@ -59,2 +78,6 @@ struct SM90ArchSpec {
+-        // Block K is always in a fixed manner
+-        const int block_k = 128 * 8 / get_num_element_bits(desc.get_mma_kind());
++        const bool serving_wo_b = desc.compiled_dims.empty() && desc.n == 5120 && desc.k == 8192;
++        const bool serving_wq_b = desc.compiled_dims.empty() && desc.n == 32768 && desc.k == 1280;
++        const int multicast_override = h20_prefill_tuning && block32 && desc.gemm_type == GemmType::Normal &&
++            desc.num_sms == 78 && (desc.m == 8192 || desc.m == 32768) ?
++            (serving_wo_b ? 2 : (serving_wq_b && desc.m == 32768 ? 1 : 0)) : 0;
++        DG_HOST_ASSERT(multicast_override >= 0 && multicast_override <= 2);
+@@ -67 +90 @@ struct SM90ArchSpec {
+-            (desc.gemm_type == GemmType::Batched);
++            (desc.gemm_type == GemmType::Batched) or (block32 && multicast_override == 0);
+@@ -72,0 +96,5 @@ struct SM90ArchSpec {
++                if (multicast_override &&
++                    (cluster_m != (multicast_override == 1 ? 2 : 1) ||
++                     cluster_n != (multicast_override == 2 ? 2 : 1)))
++                    continue;
++
+@@ -82,0 +111,4 @@ struct SM90ArchSpec {
++                        // Long K favors overlapping wide single-wave tiles; short K can
++                        // amortize B loads across two M waves without spilling.
++                        if (block32 && block_m > max_block_m && block_m != forced_tile_m)
++                            continue;
+@@ -115,0 +148,6 @@ struct SM90ArchSpec {
++        if (forced_tile_m != 0 && std::any_of(candidates.begin(), candidates.end(),
++                [&](const Layout& layout) { return layout.block_m == forced_tile_m; })) {
++            std::erase_if(candidates, [&](const Layout& layout) {
++                return layout.block_m != forced_tile_m;
++            });
++        }
+@@ -149,0 +188,5 @@ struct SM90ArchSpec {
++        const bool block32 = desc.kernel_type == KernelType::Kernel1D2D and desc.max_gran_k == 32;
++        const int scale_gran_k = block32 ? desc.max_gran_k : layout.block_k;
++        const int scales_per_stage = layout.block_k / scale_gran_k;
++        const int scale_b_rows = block32 ? layout.block_n / scale_gran_k :
++            (layout.block_k % layout.block_n == 0 ? 1 : 2);
+@@ -164 +207 @@ struct SM90ArchSpec {
+-            0 : align(layout.block_m * static_cast<int>(sizeof(float)), 128);
++            0 : align(layout.block_m * scales_per_stage * static_cast<int>(sizeof(float)), 128);
+@@ -169 +211,0 @@ struct SM90ArchSpec {
+-        const int use_uniform_sfb = layout.block_k % layout.block_n == 0 ? 1 : 2;
+@@ -171 +213 @@ struct SM90ArchSpec {
+-            0 : align<int>(ceil_div(desc.k, layout.block_k) * static_cast<int>(sizeof(float)) * use_uniform_sfb, 8);
++            0 : align<int>(ceil_div(desc.k, scale_gran_k) * scale_b_rows * static_cast<int>(sizeof(float)), 8);
+diff --git a/csrc/jit_kernels/heuristics/sm90_fused_mega_moe.hpp b/csrc/jit_kernels/heuristics/sm90_fused_mega_moe.hpp
+index d269c42..19a64df 100644
+--- a/csrc/jit_kernels/heuristics/sm90_fused_mega_moe.hpp
++++ b/csrc/jit_kernels/heuristics/sm90_fused_mega_moe.hpp
+@@ -102,0 +103,7 @@ static int get_auto_late_lag_sm90_fused(const int& num_max_tokens_per_rank, cons
++    if (num_max_tokens_per_rank >= 8192) {
++        const auto override = deep_jit::get_env<int>("DG_SM90_PREFILL_LAG", 0);
++        if (override != 0) {
++            DG_HOST_ASSERT(override >= kSm90FusedAutoLagMinUnits and override <= kSm90FusedAutoLagMaxUnits);
++            return override;
++        }
++    }
+@@ -732,3 +739,5 @@ static MegaMoESM90FusedConfig get_mega_moe_config_sm90_fused(
+-    const bool pull_publish_rule_on = sm90_fused_rule_tokens_per_rank(num_tokens, num_tokens_bound) >= kSm90FusedPullPublishMinTokens and
+-        pull_publish_batch_fits_ring(kSm90FusedPullPublishBatch);
+-    const int pull_publish_batch = pull_publish_rule_on ? kSm90FusedPullPublishBatch : 1;
++    const bool large_prefill = sm90_fused_rule_tokens_per_rank(num_tokens, num_tokens_bound) >= kSm90FusedPullPublishMinTokens;
++    const int publish_batch = large_prefill
++        ? deep_jit::get_env<int>("DG_SM90_PREFILL_PULL_PUBLISH_BATCH", kSm90FusedPullPublishBatch) : 1;
++    DG_HOST_ASSERT(publish_batch >= 1 and publish_batch <= 256);
++    const int pull_publish_batch = pull_publish_batch_fits_ring(publish_batch) ? publish_batch : 1;
+@@ -742,9 +750,0 @@ static MegaMoESM90FusedConfig get_mega_moe_config_sm90_fused(
+-    auto [num_stages, smem_size] = get_pipeline_config_sm90_fused(
+-        SM90ArchSpec::smem_capacity,
+-        num_experts, hidden, intermediate_hidden,
+-        block_m, block_n, block_k,
+-        num_dispatch_threads / 32, num_epilogue_threads / 32,
+-        use_swap_ab, /*half_l2_cd=*/false,
+-        0, tile_table_entries, l2_act_sf_gran_k, early_combine_fits_smem != 0, pull_publish_batch, mxfp4_weights,
+-        mxfp4_expanded_buffers);
+-
+@@ -762,8 +761,0 @@ static MegaMoESM90FusedConfig get_mega_moe_config_sm90_fused(
+-        const auto [ns_half, sz_half] = get_pipeline_config_sm90_fused(
+-            SM90ArchSpec::smem_capacity,
+-            num_experts, hidden, intermediate_hidden,
+-            block_m, block_n, block_k,
+-            num_dispatch_threads / 32, num_epilogue_threads / 32,
+-            use_swap_ab, /*half_l2_cd=*/true,
+-            l2_cd_passes, tile_table_entries, l2_act_sf_gran_k, early_combine_fits_smem != 0, pull_publish_batch,
+-            mxfp4_weights, mxfp4_expanded_buffers);
+@@ -771,3 +763,11 @@ static MegaMoESM90FusedConfig get_mega_moe_config_sm90_fused(
+-        num_stages = ns_half;
+-        smem_size = sz_half;
+-    } else if (split_phase_prefill and num_stages < 3 and not mxfp4_weights) {
++    }
++    auto [num_stages, smem_size] = get_pipeline_config_sm90_fused(
++        SM90ArchSpec::smem_capacity,
++        num_experts, hidden, intermediate_hidden,
++        block_m, block_n, block_k,
++        num_dispatch_threads / 32, num_epilogue_threads / 32,
++        use_swap_ab, half_l2_cd,
++        l2_cd_passes, tile_table_entries, l2_act_sf_gran_k, early_combine_fits_smem != 0, pull_publish_batch,
++        mxfp4_weights, mxfp4_expanded_buffers);
++
++    if (not split_m2 and split_phase_prefill and num_stages < 3 and not mxfp4_weights) {
+diff --git a/csrc/jit_kernels/impls/sm90_fp8_fused_mega_moe.hpp b/csrc/jit_kernels/impls/sm90_fp8_fused_mega_moe.hpp
+index 5e1c6d8..937e19f 100644
+--- a/csrc/jit_kernels/impls/sm90_fp8_fused_mega_moe.hpp
++++ b/csrc/jit_kernels/impls/sm90_fp8_fused_mega_moe.hpp
+@@ -249 +249,2 @@ static void sm90_fp8_fused_mega_moe(
+-    const bool& split_k_hint = false
++    const bool& split_k_hint = false,
++    const std::optional<bool>& pdl_override = std::nullopt
+@@ -413 +414 @@ static void sm90_fp8_fused_mega_moe(
+-    const bool pdl = jit->default_launch_options.enable_pdl.value_or(false) or rule_tokens_per_rank <= kSm90FusedPdlMaxTokens;
++    const bool pdl = pdl_override.value_or(jit->default_launch_options.enable_pdl.value_or(false)) or rule_tokens_per_rank <= kSm90FusedPdlMaxTokens;
+diff --git a/csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp b/csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp
+index 89d0d2b..084b19e 100644
+--- a/csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp
++++ b/csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp
+@@ -4 +4 @@
+-#include <torch/python.h>
++#include <torch/torch.h>
+@@ -29,0 +30,3 @@ public:
++        int sf_granularity = 128;
++        const void* q_positions = nullptr;
++        const void* q_freqs = nullptr;
+@@ -32,0 +36,9 @@ public:
++        // A known N keeps wide single-CTA SM90 tiles free of register spills.
++        const bool specialize_n = args.gemm_desc.gemm_type == GemmType::Normal &&
++            args.gemm_desc.compiled_dims.empty() && args.gemm_config.layout.block_m == 128 &&
++            args.gemm_config.layout.block_n > 128 && args.gemm_config.layout.get_cluster_size() == 1;
++        // Specialize fixed N/K to simplify scale indexing.
++        // Keep M dynamic to avoid specialization for each token count.
++        auto compiled_dims = args.gemm_desc.compiled_dims;
++        if (args.sf_granularity == 32 and compiled_dims.empty())
++            compiled_dims = "nk";
+@@ -50 +62 @@ static void __instantiate_kernel() {{
+-        {}
++        {}, {}, {}
+@@ -55,3 +67,3 @@ static void __instantiate_kernel() {{
+-        get_compiled_dim(args.gemm_desc.m, 'm', args.gemm_desc.compiled_dims),
+-        get_compiled_dim(args.gemm_desc.n, 'n', args.gemm_desc.compiled_dims),
+-        get_compiled_dim(args.gemm_desc.k, 'k', args.gemm_desc.compiled_dims),
++        get_compiled_dim(args.gemm_desc.m, 'm', compiled_dims),
++        get_compiled_dim(args.gemm_desc.n, 'n', specialize_n ? "n" : compiled_dims),
++        get_compiled_dim(args.gemm_desc.k, 'k', compiled_dims),
+@@ -66 +78 @@ static void __instantiate_kernel() {{
+-        get_default_epilogue_type(args.epilogue_type)));
++        get_default_epilogue_type(args.epilogue_type), args.sf_granularity, args.q_freqs ? "true" : "false"));
+@@ -74 +86 @@ static void __instantiate_kernel() {{
+-            args.tensor_map_d, args.tensor_map_sfa
++            args.tensor_map_d, args.tensor_map_sfa, args.q_positions, args.q_freqs
+@@ -86,2 +98,9 @@ static void sm90_fp8_gemm_1d2d(const torch::Tensor& a, const torch::Tensor& sfa,
+-                               const std::optional<std::string>& epilogue_type = std::nullopt) {
+-    DG_HOST_ASSERT(not c.has_value() and d.scalar_type() == torch::kBFloat16);
++                               const std::optional<std::string>& epilogue_type = std::nullopt,
++                               const int sf_granularity = 128,
++                               const torch::Tensor* q_positions = nullptr,
++                               const torch::Tensor* q_freqs = nullptr) {
++    const bool q8_rope = q_freqs != nullptr;
++    DG_HOST_ASSERT(not c.has_value());
++    DG_HOST_ASSERT(d.scalar_type() == (q8_rope ? torch::kFloat8_e4m3fn : torch::kBFloat16));
++    DG_HOST_ASSERT(sf_granularity == 128 or sf_granularity == 32);
++    DG_HOST_ASSERT(sf_granularity != 32 or (n % 8 == 0 and k % 32 == 0));
+@@ -95 +114 @@ static void sm90_fp8_gemm_1d2d(const torch::Tensor& a, const torch::Tensor& sfa,
+-        .cd_dtype = d.scalar_type(),
++        .cd_dtype = q8_rope ? torch::kBFloat16 : d.scalar_type(),
+@@ -100 +119,2 @@ static void sm90_fp8_gemm_1d2d(const torch::Tensor& a, const torch::Tensor& sfa,
+-        .compiled_dims = compiled_dims
++        .compiled_dims = compiled_dims,
++        .max_gran_k = sf_granularity
+@@ -116,0 +137,4 @@ static void sm90_fp8_gemm_1d2d(const torch::Tensor& a, const torch::Tensor& sfa,
++    if (q8_rope) {
++        DG_HOST_ASSERT(config.layout.block_n == 128 and config.storage_config.swizzle_cd_mode == 128);
++        DG_HOST_ASSERT(m % config.layout.block_m == 0);
++    }
+@@ -119 +143 @@ static void sm90_fp8_gemm_1d2d(const torch::Tensor& a, const torch::Tensor& sfa,
+-                                               config.storage_config.store_block_n,
++                                               q8_rope ? config.layout.block_n : config.storage_config.store_block_n,
+@@ -123 +147 @@ static void sm90_fp8_gemm_1d2d(const torch::Tensor& a, const torch::Tensor& sfa,
+-                                                 config.layout.block_m, config.layout.block_k, 1, 0);
++                                                 config.layout.block_m, sf_granularity, 1, 0, 0, false, config.layout.block_k / sf_granularity);
+@@ -142,0 +167,3 @@ static void sm90_fp8_gemm_1d2d(const torch::Tensor& a, const torch::Tensor& sfa,
++        .sf_granularity = sf_granularity,
++        .q_positions = q8_rope ? q_positions->data_ptr() : nullptr,
++        .q_freqs = q8_rope ? q_freqs->data_ptr() : nullptr,
+@@ -298 +325,2 @@ static void sm90_fp8_bmm(const torch::Tensor& a, const torch::Tensor& sfa,
+-                         const std::string& compiled_dims) {
++                         const std::string& compiled_dims,
++                         const int sf_granularity = 128) {
+@@ -300,0 +329,6 @@ static void sm90_fp8_bmm(const torch::Tensor& a, const torch::Tensor& sfa,
++    const bool block32 = sf_granularity == 32;
++    if (block32) {
++        DG_HOST_ASSERT(not c.has_value() and n % 32 == 0 and k % 128 == 0);
++        DG_HOST_ASSERT(a.stride(0) == k and a.stride(1) == batch_size * k);
++        DG_HOST_ASSERT(d.stride(0) == n and d.stride(1) == batch_size * n);
++    }
+@@ -312 +346,2 @@ static void sm90_fp8_bmm(const torch::Tensor& a, const torch::Tensor& sfa,
+-        .compiled_dims = compiled_dims
++        .compiled_dims = compiled_dims,
++        .max_gran_k = sf_granularity
+@@ -320 +355,5 @@ static void sm90_fp8_bmm(const torch::Tensor& a, const torch::Tensor& sfa,
+-    const auto tensor_map_a = make_tma_3d_desc(a, k, m, batch_size,
++    const auto tensor_map_a = block32
++        ? make_tma_3d_desc(a, k, batch_size, m,
++                          config.layout.block_k, 1, load_block_m,
++                          a.stride(0), a.stride(1), config.storage_config.swizzle_a_mode)
++        : make_tma_3d_desc(a, k, m, batch_size,
+@@ -335 +374,5 @@ static void sm90_fp8_bmm(const torch::Tensor& a, const torch::Tensor& sfa,
+-    const auto tensor_map_d = make_tma_3d_desc(d, n, m, batch_size,
++    const auto tensor_map_d = block32
++        ? make_tma_3d_desc(d, n, batch_size, m,
++                          store_block_n, 1, store_block_m,
++                          d.stride(0), d.stride(1), config.storage_config.swizzle_cd_mode)
++        : make_tma_3d_desc(d, n, m, batch_size,
+@@ -341 +384,2 @@ static void sm90_fp8_bmm(const torch::Tensor& a, const torch::Tensor& sfa,
+-                                                 config.layout.block_m, config.layout.block_k, batch_size, 0);
++                                                 config.layout.block_m, sf_granularity, batch_size,
++                                                 0, 0, false, config.layout.block_k / sf_granularity);
+@@ -360,0 +405 @@ static void sm90_fp8_bmm(const torch::Tensor& a, const torch::Tensor& sfa,
++        .sf_granularity = sf_granularity,
+diff --git a/csrc/jit_kernels/impls/sm90_fp8_mqa_logits.hpp b/csrc/jit_kernels/impls/sm90_fp8_mqa_logits.hpp
+index 48707a6..c2faf8a 100644
+--- a/csrc/jit_kernels/impls/sm90_fp8_mqa_logits.hpp
++++ b/csrc/jit_kernels/impls/sm90_fp8_mqa_logits.hpp
+@@ -139 +138,0 @@ static void __instantiate_kernel() {{
+-        uint32_t{1},
+@@ -167 +165,0 @@ static void sm90_fp8_paged_mqa_logits(const torch::Tensor& q,
+-    constexpr int compute_block_kv = 64;
+@@ -172 +169,0 @@ static void sm90_fp8_paged_mqa_logits(const torch::Tensor& q,
+-    DG_HOST_ASSERT(block_kv == 32 or block_kv == 64);
+@@ -174,5 +170,0 @@ static void sm90_fp8_paged_mqa_logits(const torch::Tensor& q,
+-    DG_HOST_ASSERT(not is_varlen);
+-    DG_HOST_ASSERT(next_n == 1 or next_n == 2 or next_n == 4);
+-    const int num_ctas_per_cluster = next_n == 4 ? 2 : 1;
+-    const int next_n_per_cta = next_n / num_ctas_per_cluster;
+-    DG_HOST_ASSERT(num_sms % num_ctas_per_cluster == 0);
+@@ -179,0 +172 @@ static void sm90_fp8_paged_mqa_logits(const torch::Tensor& q,
++    const int next_n_atom = (is_varlen or next_n >= 2) ? 2 : 1;
+@@ -181 +174 @@ static void sm90_fp8_paged_mqa_logits(const torch::Tensor& q,
+-                                               head_dim, next_n_per_cta * num_heads,
++                                               head_dim, next_n_atom * num_heads,
+@@ -193 +186 @@ static void sm90_fp8_paged_mqa_logits(const torch::Tensor& q,
+-                                                     num_heads, next_n_per_cta,
++                                                     num_heads, next_n_atom,
+@@ -197,2 +190,2 @@ static void sm90_fp8_paged_mqa_logits(const torch::Tensor& q,
+-    const int smem_q_size_per_stage = next_n_per_cta * num_heads * head_dim * static_cast<int>(q.element_size());
+-    const int aligned_smem_weight_size_per_stage = align(next_n_per_cta * num_heads * static_cast<int>(weights.element_size()), swizzle_alignment);
++    const int smem_q_size_per_stage = next_n * num_heads * head_dim * static_cast<int>(q.element_size());
++    const int aligned_smem_weight_size_per_stage = align(next_n * num_heads * static_cast<int>(weights.element_size()), swizzle_alignment);
+@@ -200,2 +193,2 @@ static void sm90_fp8_paged_mqa_logits(const torch::Tensor& q,
+-    const int smem_kv_size_per_stage = compute_block_kv * head_dim * static_cast<int>(kv_cache.element_size());
+-    const int aligned_smem_kv_scale_size_per_stage = align(compute_block_kv * static_cast<int>(kv_cache_scales.element_size()), swizzle_alignment);
++    const int smem_kv_size_per_stage = block_kv * head_dim * static_cast<int>(kv_cache.element_size());
++    const int aligned_smem_kv_scale_size_per_stage = align(block_kv * static_cast<int>(kv_cache_scales.element_size()), swizzle_alignment);
+@@ -206,0 +200 @@ static void sm90_fp8_paged_mqa_logits(const torch::Tensor& q,
++    DG_HOST_ASSERT(next_n == 1 or next_n == 2);
+@@ -224 +218 @@ static void __instantiate_kernel() {{
+-        {}, {}
++        {}
+@@ -234 +228 @@ static void __instantiate_kernel() {{
+-    num_ctas_per_cluster, to_string(logits_dtype)));
++    to_string(logits_dtype)));
+@@ -242 +235,0 @@ static void __instantiate_kernel() {{
+-            .cluster_dim = dim3(num_ctas_per_cluster, 1, 1),
+diff --git a/csrc/jit_kernels/impls/sm90_mega_mhc.hpp b/csrc/jit_kernels/impls/sm90_mega_mhc.hpp
+new file mode 100644
+index 0000000..3ecb1cc
+--- /dev/null
++++ b/csrc/jit_kernels/impls/sm90_mega_mhc.hpp
+@@ -0,0 +1,152 @@
++#pragma once
++
++#include <cstdio>
++#include <format>
++
++#include <deep_gemm/layout/sm90_mega_mhc.cuh>
++
++#include "../../runtime/jit.hpp"
++#include "../heuristics/sm90.hpp"
++#include "runtime_utils.hpp"
++
++namespace deep_gemm {
++
++namespace mhc_layout = layout::mega_mhc;
++
++static void sm90_mega_mhc(
++    const torch::Tensor& x, const torch::Tensor& residual,
++    const torch::Tensor& post_mix, const torch::Tensor& comb_res_mix,
++    const std::optional<torch::Tensor>& shifted_prev_mix, const torch::Tensor& fn,
++    const torch::Tensor& mix_scales, const torch::Tensor& mix_bases,
++    const float& hc_norm_eps, const float& hc_pre_eps, const float& hc_post_scale,
++    const float& sinkhorn_eps, const int& num_sinkhorn_iters,
++    const torch::Tensor& rmsnorm_weight, const float& rmsnorm_eps,
++    const torch::Tensor& new_residual,
++    const std::optional<torch::Tensor>& new_prev_mix, const torch::Tensor& new_post_mix,
++    const torch::Tensor& new_comb_res_mix, const torch::Tensor& y_bf16,
++    const bool& store_bf16,
++    const torch::Tensor& scratch,
++    const torch::Tensor& split_barriers,
++    const std::optional<torch::Tensor>& y_fp8,
++    const std::optional<torch::Tensor>& y_primary_sf,
++    const std::optional<torch::Tensor>& y_shared_sf,
++    const int& shared_sf_block_m, const float& rmsnorm_scale,
++    const int& num_tokens, const int& hidden, const int& num_splits, const int& num_sms) {
++    const bool is_shifted = shifted_prev_mix.has_value();
++
++    const auto make_hidden_tma_desc = [&](const torch::Tensor& tensor) {
++        return make_tma_2d_desc(tensor, hidden, num_tokens, mhc_layout::BLOCK_K, mhc_layout::BLOCK_M,
++                                static_cast<int>(tensor.stride(0)), mhc_layout::kSwizzleMode);
++    };
++    const auto make_residual_tma_desc = [&](const torch::Tensor& tensor) {
++        return make_tma_3d_desc(
++            tensor, hidden, num_tokens, mhc_layout::kNumRoutes,
++            mhc_layout::BLOCK_K, mhc_layout::BLOCK_M, mhc_layout::kNumRoutes,
++            static_cast<int>(tensor.stride(0)), static_cast<int>(tensor.stride(1)), mhc_layout::kSwizzleMode);
++    };
++    const auto make_coeff_tma_desc = [&](const torch::Tensor& tensor, const int channels, const int swizzle_mode) {
++        return make_tma_2d_desc(
++            tensor, channels, num_tokens, channels, mhc_layout::BLOCK_M,
++            static_cast<int>(tensor.stride(0)), swizzle_mode);
++    };
++
++    const auto smem_size = static_cast<int>(sizeof(layout::sm90_mega_mhc::SharedStorage));
++    DG_HOST_ASSERT(smem_size <= SM90ArchSpec::smem_capacity);
++
++    if (deep_jit::get_env<int>("DG_PRINT_CONFIGS")) {
++        printf("Mega %s mHC: T=%d, H=%d, splits=%d, IO/Fn/A stages=%u/%u/%u, "
++               "threads=%u, shared memory=%d\n",
++               is_shifted ? "shifted" : "normal", num_tokens, hidden, num_splits,
++               layout::sm90_mega_mhc::kNumIOStages, mhc_layout::kNumFnStages, mhc_layout::kNumAStages,
++               mhc_layout::kNumThreads, smem_size);
++    }
++
++    // Tensor maps use fastest-moving dimensions first. Residual and Fn expose
++    // the HC route as a third dimension without materializing transposed views.
++    const auto tensor_map_residual = make_residual_tma_desc(residual);
++    const auto tensor_map_x = make_hidden_tma_desc(x);
++    const auto tensor_map_fn = make_tma_3d_desc(
++        fn,
++        hidden, mhc_layout::kNumHCOutputs, mhc_layout::kNumRoutes,
++        mhc_layout::BLOCK_K, mhc_layout::kNumHCOutputs, mhc_layout::kNumRoutes,
++        static_cast<int>(fn.stride(0)), hidden,
++        mhc_layout::kSwizzleMode, 0, true);
++    const auto tensor_map_post_mix = make_coeff_tma_desc(post_mix, mhc_layout::kNumRoutes, 0);
++    const auto tensor_map_comb_res_mix = make_coeff_tma_desc(
++        comb_res_mix, mhc_layout::kNumRoutes * mhc_layout::kNumRoutes, mhc_layout::kSwizzleMode / 2);
++    const auto tensor_map_shifted_prev_mix = make_coeff_tma_desc(
++        is_shifted ? shifted_prev_mix.value() : post_mix, mhc_layout::kNumRoutes, 0);
++    const auto tensor_map_new_residual = make_residual_tma_desc(new_residual);
++    const auto tensor_map_y_bf16 = make_hidden_tma_desc(is_shifted ? y_bf16 : x);
++
++    const mhc_layout::MixArgs mix_args = {
++        .scales = mix_scales.data_ptr<float>(),
++        .bases = mix_bases.data_ptr<float>(),
++        .new_prev_mix = is_shifted ? new_prev_mix->data_ptr<float>() : nullptr,
++        .new_post_mix = new_post_mix.data_ptr<float>(),
++        .new_comb_res_mix = new_comb_res_mix.data_ptr<float>(),
++        .hc_norm_eps = hc_norm_eps,
++        .hc_pre_eps = hc_pre_eps,
++        .hc_post_scale = hc_post_scale,
++        .sinkhorn_eps = sinkhorn_eps,
++        .num_sinkhorn_iters = static_cast<uint32_t>(num_sinkhorn_iters),
++    };
++    const mhc_layout::NormArgs norm_args = {
++        .num_tokens = static_cast<uint32_t>(num_tokens),
++        .weight = reinterpret_cast<const nv_bfloat16*>(rmsnorm_weight.data_ptr()),
++        .new_residual = reinterpret_cast<const nv_bfloat16*>(new_residual.data_ptr()),
++        .eps = rmsnorm_eps,
++        .scale = rmsnorm_scale,
++        .y_bf16 = reinterpret_cast<nv_bfloat16*>(y_bf16.data_ptr()),
++        .y_fp8 = y_fp8.has_value() ? reinterpret_cast<__nv_fp8_e4m3*>(y_fp8->data_ptr()) : nullptr,
++        .y_primary_sf = y_primary_sf.has_value() ? reinterpret_cast<uint32_t*>(y_primary_sf->data_ptr<int32_t>()) : nullptr,
++        .y_primary_sf_stride_token = y_primary_sf.has_value() ? y_primary_sf->stride(0) : 0,
++        .y_primary_sf_stride_word = y_primary_sf.has_value() ? y_primary_sf->stride(1) : 0,
++        .y_shared_sf = y_shared_sf.has_value() ? reinterpret_cast<uint32_t*>(y_shared_sf->data_ptr<int32_t>()) : nullptr,
++        .y_shared_sf_stride_word = y_shared_sf.has_value() ? y_shared_sf->stride(1) : 0,
++    };
++
++    deep_jit::cuda::CompilerOptions compiler_options;
++    // Compile
++    const auto kernel = jit->compile("sm90_mega_mhc", std::format(R"(
++#include <deep_gemm/impls/sm90_mega_mhc.cuh>
++
++using namespace deep_gemm;
++
++static void __instantiate_kernel() {{
++    auto ptr = reinterpret_cast<void*>(&sm90_mega_mhc_impl<
++        {}, {}, {},
++        {}, {}, {}, {}
++    >);
++}};
++)",
++        hidden, num_splits, num_sms,
++        mix_args.new_prev_mix != nullptr,
++        store_bf16,
++        norm_args.y_fp8 != nullptr,
++        shared_sf_block_m), compiler_options);
++
++    // Launch
++    jit->launch(
++        kernel, {
++            .num_smem_bytes = smem_size,
++            .grid_dim = dim3(num_sms, 1, 1),
++            .block_dim = dim3(mhc_layout::kNumThreads, 1, 1),
++            // SM90 mHC has no griddepcontrol wait/trigger; never inherit dense PDL.
++            .enable_pdl = false,
++        },
++        tensor_map_residual,
++        tensor_map_x,
++        tensor_map_fn,
++        tensor_map_post_mix,
++        tensor_map_comb_res_mix,
++        tensor_map_shifted_prev_mix,
++        tensor_map_new_residual,
++        tensor_map_y_bf16,
++        mix_args,
++        norm_args,
++        scratch.data_ptr(),
++        reinterpret_cast<uint64_t*>(split_barriers.data_ptr()));
++}
++
++} // namespace deep_gemm
+diff --git a/csrc/python_api.cpp b/csrc/python_api.cpp
+index 629184d..dd96a32 100644
+--- a/csrc/python_api.cpp
++++ b/csrc/python_api.cpp
+@@ -15,0 +16 @@
++#include "apis/h20.hpp"
+@@ -43,0 +45 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
++    deep_gemm::h20::register_apis(m);
+diff --git a/deep_gemm/__init__.py b/deep_gemm/__init__.py
+index d4c69db..ba39461 100644
+--- a/deep_gemm/__init__.py
++++ b/deep_gemm/__init__.py
+@@ -0,0 +1 @@
++import atexit
+@@ -16,0 +18 @@ from ._C import (
++    shutdown,
+@@ -119,0 +122 @@ _C.init(os.path.dirname(os.path.abspath(__file__)))
++atexit.register(shutdown)
+@@ -121 +124,3 @@ _C.init(os.path.dirname(os.path.abspath(__file__)))
+-__version__ = '2.8.0'
++__version__ = '2.8.0+h20.5'
++__h20_unified__ = True
++from ._C import dsv41_wqb_q8_rope
+diff --git a/deep_gemm/include/deep_gemm/common/fp32x2.cuh b/deep_gemm/include/deep_gemm/common/fp32x2.cuh
+new file mode 100644
+index 0000000..6826f02
+--- /dev/null
++++ b/deep_gemm/include/deep_gemm/common/fp32x2.cuh
+@@ -0,0 +1,26 @@
++#pragma once
++
++#include <cuda_runtime.h>
++#include <cutlass/cutlass.h>
++
++namespace deep_gemm::math {
++
++// Blackwell packed FP32 instructions have no Hopper equivalent. Keep the
++// component-wise rounding boundaries identical when lowering to scalar SM90 ops.
++CUTLASS_DEVICE float2 mul_fp32x2_rn(const float2 a, const float2 b) {
++#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 1000
++    return __fmul2_rn(a, b);
++#else
++    return {__fmul_rn(a.x, b.x), __fmul_rn(a.y, b.y)};
++#endif
++}
++
++CUTLASS_DEVICE float2 fma_fp32x2_rn(const float2 a, const float2 b, const float2 c) {
++#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 1000
++    return __ffma2_rn(a, b, c);
++#else
++    return {__fmaf_rn(a.x, b.x, c.x), __fmaf_rn(a.y, b.y, c.y)};
++#endif
++}
++
++} // namespace deep_gemm::math
+diff --git a/deep_gemm/include/deep_gemm/epilogue/sm100_mega_mhc.cuh b/deep_gemm/include/deep_gemm/epilogue/sm100_mega_mhc.cuh
+index 24960b7..3603da3 100644
+--- a/deep_gemm/include/deep_gemm/epilogue/sm100_mega_mhc.cuh
++++ b/deep_gemm/include/deep_gemm/epilogue/sm100_mega_mhc.cuh
+@@ -6,0 +7 @@
++#include <deep_gemm/common/fp32x2.cuh>
+@@ -15,10 +16,5 @@ using namespace layout::mega_mhc;
+-// Reduce one token's split partials and produce its Mix coefficients.
+-template <uint32_t kHidden, bool kIsShifted, uint32_t kNumSplits>
+-CUTLASS_DEVICE float run_mix_task(const Workspace<kNumSplits>& workspace, uint64_t* gmem_split_barriers,
+-                                  const MixArgs& mix_args,
+-                                  const uint32_t& token_idx, const uint32_t& lane_idx) {
+-    const uint32_t m_block_idx = token_idx / BLOCK_M;
+-    const uint32_t row_idx = token_idx % BLOCK_M;
+-    sched::mega_mhc::Mix::wait<kNumSplits>(gmem_split_barriers, m_block_idx);
+-
+-    // Reduce HC norm statistics and GEMM outputs across the split tasks.
++// Both serial and SM90 cooperative reduction use the same numerical epilogue.
++template <uint32_t kHidden, bool kIsShifted>
++CUTLASS_DEVICE float finish_mix(const float hc_output, const float hc_norm_sqr_sum,
++                               const MixArgs& mix_args, const uint32_t token_idx,
++                               const uint32_t lane_idx) {
+@@ -26,17 +21,0 @@ CUTLASS_DEVICE float run_mix_task(const Workspace<kNumSplits>& workspace, uint64
+-    const uint32_t first_task_idx = m_block_idx * kNumSplits;
+-    const auto hc_norm_sqr_sum_partials = workspace.get_hc_norm_sqr_sum_partial_ptr(first_task_idx);
+-    float hc_norm_sqr_sum = 0.0f;
+-    #pragma unroll
+-    for (uint32_t k_split_idx = lane_idx; k_split_idx < kNumSplits; k_split_idx += 32)
+-        hc_norm_sqr_sum += hc_norm_sqr_sum_partials[
+-            k_split_idx * kNumSqrSumPartialElementsPerTask + row_idx];
+-    hc_norm_sqr_sum = math::warp_reduce_sum(hc_norm_sqr_sum);
+-
+-    const uint32_t safe_hc_output_idx = cute::min(lane_idx, kNumHCOutputs - 1);
+-    const auto gemm_partials = workspace.get_gemm_partial_ptr(first_task_idx);
+-    float hc_output = 0.0f;
+-    #pragma unroll
+-    for (uint32_t k_split_idx = 0; k_split_idx < kNumSplits; ++ k_split_idx)
+-        hc_output += gemm_partials[k_split_idx * kNumGemmPartialElementsPerTask +
+-                                   row_idx * kNumHCOutputs + safe_hc_output_idx];
+-    hc_output = is_hc_output_lane ? hc_output : 0.0f;
+@@ -102,0 +82,31 @@ CUTLASS_DEVICE float run_mix_task(const Workspace<kNumSplits>& workspace, uint64
++// Reduce one token's split partials and produce its Mix coefficients.
++template <uint32_t kHidden, bool kIsShifted, uint32_t kNumSplits>
++CUTLASS_DEVICE float run_mix_task(const Workspace<kNumSplits>& workspace, uint64_t* gmem_split_barriers,
++                                  const MixArgs& mix_args,
++                                  const uint32_t& token_idx, const uint32_t& lane_idx) {
++    const uint32_t m_block_idx = token_idx / BLOCK_M;
++    const uint32_t row_idx = token_idx % BLOCK_M;
++    sched::mega_mhc::Mix::wait<kNumSplits>(gmem_split_barriers, m_block_idx);
++
++    // Reduce HC norm statistics and GEMM outputs across the split tasks.
++    const bool is_hc_output_lane = lane_idx < kNumHCOutputs;
++    const uint32_t first_task_idx = m_block_idx * kNumSplits;
++    const auto hc_norm_sqr_sum_partials = workspace.get_hc_norm_sqr_sum_partial_ptr(first_task_idx);
++    float hc_norm_sqr_sum = 0.0f;
++    #pragma unroll
++    for (uint32_t k_split_idx = lane_idx; k_split_idx < kNumSplits; k_split_idx += 32)
++        hc_norm_sqr_sum += hc_norm_sqr_sum_partials[
++            k_split_idx * kNumSqrSumPartialElementsPerTask + row_idx];
++    hc_norm_sqr_sum = math::warp_reduce_sum(hc_norm_sqr_sum);
++
++    const uint32_t safe_hc_output_idx = cute::min(lane_idx, kNumHCOutputs - 1);
++    const auto gemm_partials = workspace.get_gemm_partial_ptr(first_task_idx);
++    float hc_output = 0.0f;
++    #pragma unroll
++    for (uint32_t k_split_idx = 0; k_split_idx < kNumSplits; ++ k_split_idx)
++        hc_output += gemm_partials[k_split_idx * kNumGemmPartialElementsPerTask +
++                                   row_idx * kNumHCOutputs + safe_hc_output_idx];
++    hc_output = is_hc_output_lane ? hc_output : 0.0f;
++    return finish_mix<kHidden, kIsShifted>(hc_output, hc_norm_sqr_sum, mix_args, token_idx, lane_idx);
++}
++
+@@ -113 +123 @@ CUTLASS_DEVICE nv_bfloat162 normalize_bf16_pair(const nv_bfloat162& input, const
+-    return __float22bfloat162_rn(__fmul2_rn(__fmul2_rn(__bfloat1622float2(input), {scale, scale}), __bfloat1622float2(weight)));
++    return __float22bfloat162_rn(math::mul_fp32x2_rn(math::mul_fp32x2_rn(__bfloat1622float2(input), {scale, scale}), __bfloat1622float2(weight)));
+@@ -140,2 +150,2 @@ template <uint32_t kHidden, uint32_t kNumSMs, bool kStoreBF16, bool kStoreFP8,
+-          uint32_t SF_BLOCK_M, uint32_t kNumSplits>
+-CUTLASS_DEVICE void run_normal_worker(SharedStorage& smem, const Workspace<kNumSplits>& workspace,
++          uint32_t SF_BLOCK_M, uint32_t kNumSplits, typename Storage>
++CUTLASS_DEVICE void run_normal_worker(Storage& smem, const Workspace<kNumSplits>& workspace,
+@@ -203 +213 @@ CUTLASS_DEVICE void run_normal_worker(SharedStorage& smem, const Workspace<kNumS
+-                    values[pair_idx] = __ffma2_rn(__bfloat1622float2(pairs[pair_idx]), {coeff, coeff}, values[pair_idx]);
++                    values[pair_idx] = math::fma_fp32x2_rn(__bfloat1622float2(pairs[pair_idx]), {coeff, coeff}, values[pair_idx]);
+@@ -209 +219 @@ CUTLASS_DEVICE void run_normal_worker(SharedStorage& smem, const Workspace<kNumS
+-                sqr_sum = __ffma2_rn(values[pair_idx], values[pair_idx], sqr_sum);
++                sqr_sum = math::fma_fp32x2_rn(values[pair_idx], values[pair_idx], sqr_sum);
+@@ -393,2 +403,2 @@ template <uint32_t kHidden, uint32_t kNumSMs, uint32_t kNumRegisters, bool kStor
+-          uint32_t SF_BLOCK_M, uint32_t kNumSplits>
+-CUTLASS_DEVICE void run_shifted_norm_worker(SharedStorage& smem, const Workspace<kNumSplits>& workspace,
++          uint32_t SF_BLOCK_M, uint32_t kNumSplits, typename Storage>
++CUTLASS_DEVICE void run_shifted_norm_worker(Storage& smem, const Workspace<kNumSplits>& workspace,
+diff --git a/deep_gemm/include/deep_gemm/epilogue/sm90_mega_mhc.cuh b/deep_gemm/include/deep_gemm/epilogue/sm90_mega_mhc.cuh
+new file mode 100644
+index 0000000..cb78df1
+--- /dev/null
++++ b/deep_gemm/include/deep_gemm/epilogue/sm90_mega_mhc.cuh
+@@ -0,0 +1,63 @@
++#pragma once
++
++#include <deep_gemm/epilogue/sm100_mega_mhc.cuh>
++
++namespace deep_gemm::epilogue::sm90_mega_mhc {
++
++using namespace layout::mega_mhc;
++
++// One WG owns one decode token. Four warps reduce disjoint split residues;
++// warp 0 then runs the unchanged affine/Sinkhorn epilogue.
++template <uint32_t kHidden, uint32_t kNumSplits, typename Storage>
++CUTLASS_DEVICE void run_shifted_mix_task_wg(
++    Storage& smem, const Workspace<kNumSplits>& workspace, uint64_t* barriers,
++    const MixArgs& mix_args, const uint32_t token_idx,
++    const uint32_t warp_idx_in_wg, const uint32_t lane_idx) {
++    constexpr uint32_t kMixBarrier = 5;
++    const uint32_t m_block_idx = token_idx / BLOCK_M;
++    const uint32_t row_idx = token_idx % BLOCK_M;
++    if (warp_idx_in_wg == 0)
++        sched::mega_mhc::Mix::wait<kNumSplits>(barriers, m_block_idx);
++    // Transfer the acquired producer writes to all participating warps.
++    cutlass::arch::NamedBarrier::sync(128, kMixBarrier);
++
++    const uint32_t first_task_idx = m_block_idx * kNumSplits;
++    const auto stats = workspace.get_hc_norm_sqr_sum_partial_ptr(first_task_idx);
++    float hc_norm_sqr_sum = 0.f;
++    for (uint32_t k = warp_idx_in_wg * 32 + lane_idx; k < kNumSplits; k += 128)
++        hc_norm_sqr_sum += stats[k * kNumSqrSumPartialElementsPerTask + row_idx];
++    hc_norm_sqr_sum = math::warp_reduce_sum(hc_norm_sqr_sum);
++
++    const bool is_output_lane = lane_idx < kNumHCOutputs;
++    const uint32_t output_idx = cute::min(lane_idx, kNumHCOutputs - 1);
++    const auto partials = workspace.get_gemm_partial_ptr(first_task_idx);
++    float hc_output = 0.f;
++    #pragma unroll
++    for (uint32_t round = 0; round < (kNumSplits + 3) / 4; ++round) {
++        const uint32_t k = round * 4 + warp_idx_in_wg;
++        if (k < kNumSplits)
++            hc_output += partials[k * kNumGemmPartialElementsPerTask + row_idx * kNumHCOutputs + output_idx];
++    }
++    if (is_output_lane)
++        smem.mix_scratch[warp_idx_in_wg][lane_idx] = hc_output;
++    if (lane_idx == 0)
++        smem.mix_scratch[warp_idx_in_wg][24] = hc_norm_sqr_sum;
++    cutlass::arch::NamedBarrier::sync(128, kMixBarrier);
++
++    if (warp_idx_in_wg == 0) {
++        hc_output = hc_norm_sqr_sum = 0.f;
++        #pragma unroll
++        for (uint32_t w = 0; w < kNumWarpsPerWG; ++w) {
++            if (is_output_lane)
++                hc_output += smem.mix_scratch[w][lane_idx];
++            hc_norm_sqr_sum += smem.mix_scratch[w][24];
++        }
++    }
++    if (warp_idx_in_wg == 0)
++        mega_mhc::finish_mix<kHidden, true>(hc_output, hc_norm_sqr_sum, mix_args, token_idx, lane_idx);
++
++    // The next token may reuse scratch only after warp 0 finishes reading it.
++    cutlass::arch::NamedBarrier::sync(128, kMixBarrier);
++}
++
++} // namespace deep_gemm::epilogue::sm90_mega_mhc
+diff --git a/deep_gemm/include/deep_gemm/impls/sm90_fp8_gemm_1d2d.cuh b/deep_gemm/include/deep_gemm/impls/sm90_fp8_gemm_1d2d.cuh
+index 08e7cba..5216686 100644
+--- a/deep_gemm/include/deep_gemm/impls/sm90_fp8_gemm_1d2d.cuh
++++ b/deep_gemm/include/deep_gemm/impls/sm90_fp8_gemm_1d2d.cuh
+@@ -48 +48 @@ template <cute::UMMA::Major kMajorSFB,
+-          typename epilogue_op_t>
++          typename epilogue_op_t, uint32_t SF_GRAN = 128, bool kQ8Rope = false>
+@@ -55 +55,2 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                        const __grid_constant__ cute::TmaDescriptor tensor_map_sfa) {
++                        const __grid_constant__ cute::TmaDescriptor tensor_map_sfa,
++                        const int64_t* q_positions, const float* q_freqs) {
+@@ -58 +59,5 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-    DG_STATIC_ASSERT(BLOCK_K == 128, "Only support per-128-channel FP8 scaling");
++    DG_STATIC_ASSERT(BLOCK_K == 128, "TMA stages use K=128");
++    DG_STATIC_ASSERT(SF_GRAN == 32 or SF_GRAN == 128, "Unsupported scale granularity");
++    DG_STATIC_ASSERT(SF_GRAN != 32 or (BLOCK_N % 32 == 0 and
++                     (kGemmType == GemmType::Normal or kGemmType == GemmType::Batched)),
++                     "Block32 supports dense and batched GEMM with aligned N tiles");
+@@ -69,0 +75,16 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
++    constexpr bool kIsBlock32 = SF_GRAN == 32;
++    constexpr bool kTokenMajorBatched = kIsBlock32 and kGemmType == GemmType::Batched;
++    constexpr uint32_t kScaleGroupsPerStage = BLOCK_K / SF_GRAN;
++    constexpr uint32_t WAVE_BLOCK_M = BLOCK_M <= WGMMA::M ? BLOCK_M : WGMMA::M * 2;
++    DG_STATIC_ASSERT(BLOCK_M % WAVE_BLOCK_M == 0, "Invalid block sizes");
++    constexpr uint32_t kFourBankMaxBlockN = 64;
++    // Multiple M waves reuse B with one bank; narrower single-wave tiles can
++    // hold every partial, while wider tiles overlap promotion with two banks.
++    constexpr uint32_t kAccumBanks = [] {
++        if constexpr (not kIsBlock32 or BLOCK_M > WAVE_BLOCK_M)
++            return 1u;
++        if constexpr (BLOCK_N <= kFourBankMaxBlockN)
++            return kScaleGroupsPerStage;
++        return 2u;
++    }();
++    constexpr bool kOverlapPromotion = kIsBlock32 and kAccumBanks == 2;
+@@ -81 +102 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-    static constexpr uint32_t SMEM_SFA_SIZE_PER_STAGE = BLOCK_M * sizeof(float);
++    static constexpr uint32_t SMEM_SFA_SIZE_PER_STAGE = BLOCK_M * kScaleGroupsPerStage * sizeof(float);
+@@ -83,3 +104,4 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-    const uint32_t shape_k_scales = math::ceil_div(shape_k, BLOCK_K);
+-    const uint32_t shape_n_sfb = math::ceil_div(shape_n, BLOCK_K);
+-    const uint32_t smem_sfb_size = math::align<uint32_t>(shape_k_scales * (kMustUseUniformedScaleB ? 1 : 2) * sizeof(float), sizeof(Barrier));
++    const uint32_t shape_k_scales = math::ceil_div(shape_k, SF_GRAN);
++    const uint32_t shape_n_sfb = math::ceil_div(shape_n, SF_GRAN);
++    constexpr uint32_t kScaleBRows = kIsBlock32 ? BLOCK_N / SF_GRAN : (kMustUseUniformedScaleB ? 1 : 2);
++    const uint32_t smem_sfb_size = math::align<uint32_t>(shape_k_scales * kScaleBRows * sizeof(float), sizeof(Barrier));
+@@ -194,5 +216,11 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                    tma::copy<BLOCK_K, BLOCK_M, kSwizzleAMode, __nv_fp8_e4m3, kIsBatchedMM>(&tensor_map_a, &full_barrier,
+-                             smem_a[stage_idx], k_idx, scheduler.get_global_idx<kWithGroupOffsetA>(shape_m, BLOCK_M, m_block_idx),
+-                             num_tma_multicast_a, batch_idx);
+-                    tma::copy<BLOCK_M, BLOCK_K, 0>(&tensor_map_sfa, &full_barrier,
+-                             smem_sfa[stage_idx], m_block_idx * BLOCK_M, scheduler.template get_global_idx<kWithGroupOffsetA, sched::IndexType::SF_K>(shape_k_scales, 1, k_block_idx),
++                    if constexpr (kTokenMajorBatched) {
++                        tma::copy<BLOCK_K, BLOCK_M, kSwizzleAMode, __nv_fp8_e4m3, true>(
++                            &tensor_map_a, &full_barrier, smem_a[stage_idx], k_idx,
++                            batch_idx, 1, m_block_idx * BLOCK_M);
++                    } else {
++                        tma::copy<BLOCK_K, BLOCK_M, kSwizzleAMode, __nv_fp8_e4m3, kIsBatchedMM>(&tensor_map_a, &full_barrier,
++                                 smem_a[stage_idx], k_idx, scheduler.get_global_idx<kWithGroupOffsetA>(shape_m, BLOCK_M, m_block_idx),
++                                 num_tma_multicast_a, batch_idx);
++                    }
++                    tma::copy<BLOCK_M, kScaleGroupsPerStage, 0>(&tensor_map_sfa, &full_barrier,
++                             smem_sfa[stage_idx], m_block_idx * BLOCK_M, scheduler.template get_global_idx<kWithGroupOffsetA, sched::IndexType::SF_K>(shape_k_scales, 1, k_block_idx * kScaleGroupsPerStage),
+@@ -237 +265,3 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-            uint32_t num_sfb = shape_k_scales * (num_former_iters >= num_full_iters ? 1 : 2);
++            uint32_t num_sfb = shape_k_scales * kScaleBRows;
++            if constexpr (not kIsBlock32)
++                num_sfb = shape_k_scales * (num_former_iters >= num_full_iters ? 1 : 2);
+@@ -245,5 +275,14 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                auto local_sfb = sfb + previous_group_offset + ((n_block_idx * BLOCK_N) / BLOCK_K) * stride_n_sfb;
+-
+-                #pragma unroll
+-                for (uint32_t i = threadIdx.x - 32; i < num_sfb; i += kNumMathThreads - 32)
+-                    ptx::st_shared(smem_sfb + i, i < shape_k_scales ? local_sfb[i * stride_k_sfb] : local_sfb[(i - shape_k_scales) * stride_k_sfb + stride_n_sfb]);
++                auto local_sfb = sfb + previous_group_offset + ((n_block_idx * BLOCK_N) / SF_GRAN) * stride_n_sfb;
++
++                if constexpr (kIsBlock32) {
++                    #pragma unroll
++                    for (uint32_t i = threadIdx.x - 32; i < num_sfb; i += kNumMathThreads - 32) {
++                        const auto row = i / shape_k_scales, col = i % shape_k_scales;
++                        const bool valid = n_block_idx * BLOCK_N / SF_GRAN + row < shape_n_sfb;
++                        ptx::st_shared(smem_sfb + i, valid ? local_sfb[row * stride_n_sfb + col * stride_k_sfb] : 0.0f);
++                    }
++                } else {
++                    #pragma unroll
++                    for (uint32_t i = threadIdx.x - 32; i < num_sfb; i += kNumMathThreads - 32)
++                        ptx::st_shared(smem_sfb + i, i < shape_k_scales ? local_sfb[i * stride_k_sfb] : local_sfb[(i - shape_k_scales) * stride_k_sfb + stride_n_sfb]);
++                }
+@@ -254,3 +293 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-            constexpr uint32_t WAVE_BLOCK_M = BLOCK_M <= WGMMA::M ? BLOCK_M : WGMMA::M * 2;
+-            DG_STATIC_ASSERT(BLOCK_M % WAVE_BLOCK_M == 0, "Invalid block sizes");
+-            float accum[WGMMA::kNumAccum], final_accum[WGMMA::kNumAccum * (BLOCK_M / WAVE_BLOCK_M)] = {0};
++            float accum[WGMMA::kNumAccum * kAccumBanks], final_accum[WGMMA::kNumAccum * (BLOCK_M / WAVE_BLOCK_M)] = {0};
+@@ -276 +313 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                constexpr bool kShouldOptimize = BLOCK_K / math::constexpr_gcd(BLOCK_K, BLOCK_N) <= 4 and not kMustUseUniformedScaleB;
++                constexpr bool kShouldOptimize = not kIsBlock32 and BLOCK_K / math::constexpr_gcd(BLOCK_K, BLOCK_N) <= 4 and not kMustUseUniformedScaleB;
+@@ -282 +319 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                    #pragma unroll 8
++                    #pragma unroll (kGemmType == GemmType::Normal && SHAPE_M == 0 && SHAPE_N == 0 && SHAPE_K == 0 && BLOCK_M == 256 && BLOCK_N == 128 ? 2 : 8)
+@@ -287,24 +324,2 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                        // Read B scales
+-                        float scale_b_0 = ptx::ld_shared(smem_sfb + k_block_idx), scale_b_1;
+-                        // NOTES: even some blocks do not need to read the second row, but we still load one to align with other blocks
+-                        if constexpr (not kMustUseUniformedScaleB)
+-                            scale_b_1 = ptx::ld_shared(smem_sfb + k_block_idx + shape_k_scales);
+-
+-                        // Wait TMA arrivals
+-                        full_barriers[stage_idx]->wait(phase);
+-
+-                        // TODO: remove some useless computation for unaligned Ms
+-                        #pragma unroll
+-                        for (uint32_t local_idx = 0; local_idx < BLOCK_M / WAVE_BLOCK_M; ++ local_idx) {
+-                            auto m_offset = local_idx * WAVE_BLOCK_M;
+-
+-                            // Read A scales
+-                            // NOTES: all shared memory read must be prior to `warpgroup_arrive` to avoid next scheduled block polluting the results
+-                            auto scale_a_0 = do_wgmma_store ? ptx::ld_shared(smem_sfa[stage_idx] + r_0 + m_offset) : 0;
+-                            auto scale_a_1 = do_wgmma_store ? ptx::ld_shared(smem_sfa[stage_idx] + r_1 + m_offset) : 0;
+-
+-                            // Commit WGMMA instructions
+-                            #pragma unroll
+-                            for (uint32_t i = 0; i < WGMMA::kNumAccum; ++ i)
+-                                ptx::warpgroup_fence_operand(accum[i]);
+-                            ptx::warpgroup_arrive();
++                        if constexpr (kIsBlock32) {
++                            full_barriers[stage_idx]->wait(phase);
+@@ -312,4 +327,79 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                            for (uint32_t k = 0; k < BLOCK_K / WGMMA::K; ++ k) {
+-                                a_desc.reg32_[0] = a_desc_base_lo + (m_offset * BLOCK_K + k * WGMMA::K) / 16;
+-                                b_desc.reg32_[0] = b_desc_base_lo + k * WGMMA::K / 16;
+-                                WGMMA::wgmma(a_desc, b_desc, accum, k);
++                            for (uint32_t local_idx = 0; local_idx < BLOCK_M / WAVE_BLOCK_M; ++ local_idx) {
++                                const auto m_offset = local_idx * WAVE_BLOCK_M;
++                                auto shifted_accum = final_accum + WGMMA::kNumAccum * local_idx;
++                                float sa0[kScaleGroupsPerStage], sa1[kScaleGroupsPerStage], sb[kScaleGroupsPerStage][kScaleBRows];
++                                // Capture all scales before arrive: non-storing warps can preload
++                                // the next tile immediately after the final WGMMA retires.
++                                #pragma unroll
++                                for (uint32_t sub_k = 0; sub_k < kScaleGroupsPerStage; ++ sub_k) {
++                                    const auto sf_a = smem_sfa[stage_idx] + sub_k * BLOCK_M + m_offset;
++                                    const uint32_t sf_k = k_block_idx * kScaleGroupsPerStage + sub_k;
++                                    sa0[sub_k] = do_wgmma_store ? ptx::ld_shared(sf_a + r_0) : 0;
++                                    sa1[sub_k] = do_wgmma_store ? ptx::ld_shared(sf_a + r_1) : 0;
++                                    #pragma unroll
++                                    for (uint32_t i = 0; i < kScaleBRows; ++ i)
++                                        sb[sub_k][i] = do_wgmma_store and sf_k < shape_k_scales ?
++                                            ptx::ld_shared(smem_sfb + i * shape_k_scales + sf_k) : 0;
++                                }
++                                auto promote = [&](const uint32_t sub_k, float* partial) {
++                                    if (not do_wgmma_store) return;
++                                    #pragma unroll
++                                    for (uint32_t i = 0; i < WGMMA::kNumAccum / 4; ++ i) {
++                                        const float scale0 = sa0[sub_k] * sb[sub_k][i / 4];
++                                        const float scale1 = sa1[sub_k] * sb[sub_k][i / 4];
++                                        shifted_accum[i * 4 + 0] += scale0 * partial[i * 4 + 0];
++                                        shifted_accum[i * 4 + 1] += scale0 * partial[i * 4 + 1];
++                                        shifted_accum[i * 4 + 2] += scale1 * partial[i * 4 + 2];
++                                        shifted_accum[i * 4 + 3] += scale1 * partial[i * 4 + 3];
++                                    }
++                                };
++                                if constexpr (kOverlapPromotion) {
++                                    #pragma unroll
++                                    for (uint32_t sub_k = 0; sub_k < kScaleGroupsPerStage; ++ sub_k) {
++                                        auto partial = accum + (sub_k % kAccumBanks) * WGMMA::kNumAccum;
++                                        #pragma unroll
++                                        for (uint32_t i = 0; i < WGMMA::kNumAccum; ++ i)
++                                            ptx::warpgroup_fence_operand(partial[i]);
++                                        ptx::warpgroup_arrive();
++                                        a_desc.reg32_[0] = a_desc_base_lo + (m_offset * BLOCK_K + sub_k * SF_GRAN) / 16;
++                                        b_desc.reg32_[0] = b_desc_base_lo + sub_k * SF_GRAN / 16;
++                                        WGMMA::wgmma(a_desc, b_desc, partial, 0);
++                                        ptx::warpgroup_commit_batch();
++                                        #pragma unroll
++                                        for (uint32_t i = 0; i < WGMMA::kNumAccum; ++ i)
++                                            ptx::warpgroup_fence_operand(partial[i]);
++                                        if (sub_k > 0) {
++                                            ptx::warpgroup_wait<1>();
++                                            promote(sub_k - 1, accum + ((sub_k - 1) % kAccumBanks) * WGMMA::kNumAccum);
++                                        }
++                                    }
++                                    ptx::warpgroup_wait<0>();
++                                    if (local_idx == BLOCK_M / WAVE_BLOCK_M - 1)
++                                        empty_barrier_arrive();
++                                    promote(kScaleGroupsPerStage - 1, accum + (kAccumBanks - 1) * WGMMA::kNumAccum);
++                                } else {
++                                    #pragma unroll
++                                    for (uint32_t batch = 0; batch < kScaleGroupsPerStage / kAccumBanks; ++ batch) {
++                                        #pragma unroll
++                                        for (uint32_t i = 0; i < WGMMA::kNumAccum * kAccumBanks; ++ i)
++                                            ptx::warpgroup_fence_operand(accum[i]);
++                                        ptx::warpgroup_arrive();
++                                        #pragma unroll
++                                        for (uint32_t bank = 0; bank < kAccumBanks; ++ bank) {
++                                            const auto sub_k = batch * kAccumBanks + bank;
++                                            a_desc.reg32_[0] = a_desc_base_lo + (m_offset * BLOCK_K + sub_k * SF_GRAN) / 16;
++                                            b_desc.reg32_[0] = b_desc_base_lo + sub_k * SF_GRAN / 16;
++                                            WGMMA::wgmma(a_desc, b_desc, accum + bank * WGMMA::kNumAccum, 0);
++                                        }
++                                        ptx::warpgroup_commit_batch();
++                                        #pragma unroll
++                                        for (uint32_t i = 0; i < WGMMA::kNumAccum * kAccumBanks; ++ i)
++                                            ptx::warpgroup_fence_operand(accum[i]);
++                                        ptx::warpgroup_wait<0>();
++                                        if (batch == kScaleGroupsPerStage / kAccumBanks - 1 and local_idx == BLOCK_M / WAVE_BLOCK_M - 1)
++                                            empty_barrier_arrive();
++                                        #pragma unroll
++                                        for (uint32_t bank = 0; bank < kAccumBanks; ++ bank)
++                                            promote(batch * kAccumBanks + bank, accum + bank * WGMMA::kNumAccum);
++                                    }
++                                }
+@@ -317,18 +407,4 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                            ptx::warpgroup_commit_batch();
+-                            #pragma unroll
+-                            for (uint32_t i = 0; i < WGMMA::kNumAccum; ++ i)
+-                                ptx::warpgroup_fence_operand(accum[i]);
+-                            ptx::warpgroup_wait<0>();
+-
+-                            // Notify barrier arrival at the last warpgroup wave
+-                            if (local_idx == BLOCK_M / WAVE_BLOCK_M - 1)
+-                                empty_barrier_arrive();
+-
+-                            // Skip promotion for the unfilled parts
+-                            if (not do_wgmma_store)
+-                                continue;
+-
+-                            // Promote with scales
+-                            // NOTES: making it as predicates is very important for performance, comparing to two loops
+-                            float scale_0_0 = scale_a_0 * scale_b_0, scale_1_0 = scale_a_1 * scale_b_0;
+-                            float scale_0_1, scale_1_1;
++                        } else {
++                            // Read B scales
++                            float scale_b_0 = ptx::ld_shared(smem_sfb + k_block_idx), scale_b_1;
++                            // NOTES: even some blocks do not need to read the second row, but we still load one to align with other blocks
+@@ -336 +412,4 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                                scale_0_1 = scale_a_0 * scale_b_1, scale_1_1 = scale_a_1 * scale_b_1;
++                                scale_b_1 = ptx::ld_shared(smem_sfb + k_block_idx + shape_k_scales);
++
++                            // Wait TMA arrivals
++                            full_barriers[stage_idx]->wait(phase);
+@@ -338 +417 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                            auto shifted_accum = final_accum + WGMMA::kNumAccum * local_idx;
++                            // TODO: remove some useless computation for unaligned Ms
+@@ -340,7 +419,50 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                            for (uint32_t i = 0; i < WGMMA::kNumAccum / 4; ++ i) {
+-                                // NOTES: for unrolled `num_former_iters` cases, we expect the compiler to automatically make it a constant
+-                                const bool predicate = kMustUseUniformedScaleB or i < num_former_iters;
+-                                shifted_accum[i * 4 + 0] += (predicate ? scale_0_0 : scale_0_1) * accum[i * 4 + 0];
+-                                shifted_accum[i * 4 + 1] += (predicate ? scale_0_0 : scale_0_1) * accum[i * 4 + 1];
+-                                shifted_accum[i * 4 + 2] += (predicate ? scale_1_0 : scale_1_1) * accum[i * 4 + 2];
+-                                shifted_accum[i * 4 + 3] += (predicate ? scale_1_0 : scale_1_1) * accum[i * 4 + 3];
++                            for (uint32_t local_idx = 0; local_idx < BLOCK_M / WAVE_BLOCK_M; ++ local_idx) {
++                                auto m_offset = local_idx * WAVE_BLOCK_M;
++
++                                // Read A scales
++                                // NOTES: all shared memory read must be prior to `warpgroup_arrive` to avoid next scheduled block polluting the results
++                                auto scale_a_0 = do_wgmma_store ? ptx::ld_shared(smem_sfa[stage_idx] + r_0 + m_offset) : 0;
++                                auto scale_a_1 = do_wgmma_store ? ptx::ld_shared(smem_sfa[stage_idx] + r_1 + m_offset) : 0;
++
++                                // Commit WGMMA instructions
++                                #pragma unroll
++                                for (uint32_t i = 0; i < WGMMA::kNumAccum; ++ i)
++                                    ptx::warpgroup_fence_operand(accum[i]);
++                                ptx::warpgroup_arrive();
++                                #pragma unroll
++                                for (uint32_t k = 0; k < BLOCK_K / WGMMA::K; ++ k) {
++                                    a_desc.reg32_[0] = a_desc_base_lo + (m_offset * BLOCK_K + k * WGMMA::K) / 16;
++                                    b_desc.reg32_[0] = b_desc_base_lo + k * WGMMA::K / 16;
++                                    WGMMA::wgmma(a_desc, b_desc, accum, k);
++                                }
++                                ptx::warpgroup_commit_batch();
++                                #pragma unroll
++                                for (uint32_t i = 0; i < WGMMA::kNumAccum; ++ i)
++                                    ptx::warpgroup_fence_operand(accum[i]);
++                                ptx::warpgroup_wait<0>();
++
++                                // Notify barrier arrival at the last warpgroup wave
++                                if (local_idx == BLOCK_M / WAVE_BLOCK_M - 1)
++                                    empty_barrier_arrive();
++
++                                // Skip promotion for the unfilled parts
++                                if (not do_wgmma_store)
++                                    continue;
++
++                                // Promote with scales
++                                // NOTES: making it as predicates is very important for performance, comparing to two loops
++                                float scale_0_0 = scale_a_0 * scale_b_0, scale_1_0 = scale_a_1 * scale_b_0;
++                                float scale_0_1, scale_1_1;
++                                if constexpr (not kMustUseUniformedScaleB)
++                                    scale_0_1 = scale_a_0 * scale_b_1, scale_1_1 = scale_a_1 * scale_b_1;
++
++                                auto shifted_accum = final_accum + WGMMA::kNumAccum * local_idx;
++                                #pragma unroll
++                                for (uint32_t i = 0; i < WGMMA::kNumAccum / 4; ++ i) {
++                                    // NOTES: for unrolled `num_former_iters` cases, we expect the compiler to automatically make it a constant
++                                    const bool predicate = kMustUseUniformedScaleB or i < num_former_iters;
++                                    shifted_accum[i * 4 + 0] += (predicate ? scale_0_0 : scale_0_1) * accum[i * 4 + 0];
++                                    shifted_accum[i * 4 + 1] += (predicate ? scale_0_0 : scale_0_1) * accum[i * 4 + 1];
++                                    shifted_accum[i * 4 + 2] += (predicate ? scale_1_0 : scale_1_1) * accum[i * 4 + 2];
++                                    shifted_accum[i * 4 + 3] += (predicate ? scale_1_0 : scale_1_1) * accum[i * 4 + 3];
++                                }
+@@ -358,0 +481,59 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
++            if constexpr (kQ8Rope) {
++                DG_STATIC_ASSERT(kGemmType == GemmType::Normal and BLOCK_N == 128 and kSwizzleDMode == 128,
++                                 "Q8 epilogue uses one full 128-byte TMA store per row");
++                constexpr uint32_t kHeadDim = 512;
++                constexpr uint32_t kRopeDim = 64;
++                constexpr uint32_t kWarpRows = WGMMA::M / 4;
++                if (not do_wgmma_store)
++                    continue;
++                if (threadIdx.x == 0)
++                    cute::tma_store_wait<0>();
++                cutlass::arch::NamedBarrier::sync(kNumWGMMAStoreThreads, 1);
++
++                const uint32_t tile_n = n_block_idx * BLOCK_N;
++                const uint32_t tile_m = m_block_idx * BLOCK_M;
++                const bool has_rope = tile_n % kHeadDim == kHeadDim - BLOCK_N;
++                const uint32_t row_in_warp = lane_idx / 4;
++                const uint32_t lane_col = (lane_idx % 4) * 2;
++                auto out = reinterpret_cast<uint8_t*>(smem_d);
++                #pragma unroll
++                for (uint32_t wave = 0; wave < BLOCK_M / WAVE_BLOCK_M; ++wave) {
++                    const uint32_t row0 = wave * WAVE_BLOCK_M + warp_idx * kWarpRows + row_in_warp;
++                    const uint32_t row1 = row0 + 8;
++                    const auto* values = final_accum + wave * WGMMA::kNumAccum;
++                    int64_t pos0 = 0, pos1 = 0;
++                    if (has_rope) {
++                        if (tile_m + row0 < shape_m)
++                            pos0 = q_positions[tile_m + row0];
++                        if (tile_m + row1 < shape_m)
++                            pos1 = q_positions[tile_m + row1];
++                    }
++                    #pragma unroll
++                    for (uint32_t i = 0; i < WGMMA::kNumAccum / 4; ++i) {
++                        const uint32_t col = i * 8 + lane_col;
++                        auto v0 = __bfloat1622float2(__float22bfloat162_rn({values[i * 4], values[i * 4 + 1]}));
++                        auto v1 = __bfloat1622float2(__float22bfloat162_rn({values[i * 4 + 2], values[i * 4 + 3]}));
++                        if (has_rope and i * 8 >= BLOCK_N - kRopeDim) {
++                            const uint32_t rope_col = col - (BLOCK_N - kRopeDim);
++                            const auto f0 = *reinterpret_cast<const float2*>(q_freqs + pos0 * kRopeDim + rope_col);
++                            const auto f1 = *reinterpret_cast<const float2*>(q_freqs + pos1 * kRopeDim + rope_col);
++                            v0 = __bfloat1622float2(__float22bfloat162_rn({v0.x * f0.x - v0.y * f0.y,
++                                                                         v0.x * f0.y + v0.y * f0.x}));
++                            v1 = __bfloat1622float2(__float22bfloat162_rn({v1.x * f1.x - v1.y * f1.y,
++                                                                         v1.x * f1.y + v1.y * f1.x}));
++                        }
++                        const uint32_t offset0 = row0 * BLOCK_N + (col ^ ((row0 % 8) * 16));
++                        const uint32_t offset1 = row1 * BLOCK_N + (col ^ ((row1 % 8) * 16));
++                        *reinterpret_cast<uint16_t*>(out + offset0) = __nv_cvt_float2_to_fp8x2(v0, __NV_SATFINITE, __NV_E4M3);
++                        *reinterpret_cast<uint16_t*>(out + offset1) = __nv_cvt_float2_to_fp8x2(v1, __NV_SATFINITE, __NV_E4M3);
++                    }
++                }
++                cute::tma_store_fence();
++                cutlass::arch::NamedBarrier::sync(kNumWGMMAStoreThreads, 1);
++                if (threadIdx.x == 0) {
++                    cute::SM90_TMA_STORE_2D::copy(&tensor_map_d, out, tile_n, tile_m);
++                    cute::tma_store_arrive();
++                }
++                continue;
++            }
++
+@@ -435 +616,4 @@ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+-                if constexpr (kGemmType == GemmType::Batched) {
++                if constexpr (kTokenMajorBatched) {
++                    cute::SM90_TMA_STORE_3D::copy(&tensor_map_d, smem_ptr,
++                                                  n_idx, scheduler.current_group_idx, m_idx);
++                } else if constexpr (kGemmType == GemmType::Batched) {
+diff --git a/deep_gemm/include/deep_gemm/impls/sm90_fp8_paged_mqa_logits.cuh b/deep_gemm/include/deep_gemm/impls/sm90_fp8_paged_mqa_logits.cuh
+index ac903fa..f388b98 100644
+--- a/deep_gemm/include/deep_gemm/impls/sm90_fp8_paged_mqa_logits.cuh
++++ b/deep_gemm/include/deep_gemm/impls/sm90_fp8_paged_mqa_logits.cuh
+@@ -22,22 +21,0 @@ namespace deep_gemm {
+-namespace sm90_paged_mqa_detail {
+-
+-template <typename T>
+-__device__ __forceinline__ T shfl_sync(unsigned mask, T var, int srcLane, int width = 32) {
+-
+-    using shfl_t = std::conditional_t<sizeof(T) == 4, int,
+-                   std::conditional_t<sizeof(T) == 8, long long, long long>>;
+-
+-    T result;
+-    shfl_t* var_ptr = reinterpret_cast<shfl_t*>(&var);
+-    shfl_t* result_ptr = reinterpret_cast<shfl_t*>(&result);
+-    *result_ptr = __shfl_sync(mask, *var_ptr, srcLane, width);
+-
+-    if constexpr (sizeof(T) == 16) {
+-        *(result_ptr + 1) = __shfl_sync(mask, *(var_ptr + 1), srcLane, width);
+-    }
+-
+-    return result;
+-}
+-
+-} // namespace sm90_paged_mqa_detail
+-
+@@ -50 +27,0 @@ template <uint32_t kNextN, uint32_t kNumHeads,
+-          uint32_t kNumCTAsPerCluster,
+@@ -63,2 +39,0 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-    constexpr uint32_t kNextNPerCTA = kNextN / kNumCTAsPerCluster;
+-    DG_STATIC_ASSERT(kNextN % kNumCTAsPerCluster == 0, "Invalid `kNextN` or `kNumCTAsPerCluster`");
+@@ -67 +42 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-    using WGMMA = typename mma::sm90::FP8MMASelector<kNextNPerCTA * kNumHeads>::type;
++    using WGMMA = typename mma::sm90::FP8MMASelector<kNextN * kNumHeads>::type;
+@@ -74 +48,0 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-    constexpr uint32_t kComputeBlockKV = 64;
+@@ -79 +53 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-    DG_STATIC_ASSERT(SPLIT_KV == kComputeBlockKV * kNumMathWarpGroups, "Invalid `SPLIT_KV`");
++    DG_STATIC_ASSERT(SPLIT_KV == BLOCK_KV * kNumMathWarpGroups, "Invalid `SPLIT_KV`");
+@@ -90,2 +64,2 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-    static constexpr uint32_t SMEM_Q_SIZE_PER_STAGE = kNextNPerCTA * kNumHeads * kHeadDim * sizeof(__nv_fp8_e4m3);
+-    static constexpr uint32_t SMEM_WEIGHT_SIZE_PER_STAGE = kNextNPerCTA * kNumHeads * sizeof(float);
++    static constexpr uint32_t SMEM_Q_SIZE_PER_STAGE = kNextN * kNumHeads * kHeadDim * sizeof(__nv_fp8_e4m3);
++    static constexpr uint32_t SMEM_WEIGHT_SIZE_PER_STAGE = kNextN * kNumHeads * sizeof(float);
+@@ -96,2 +70,2 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-    static constexpr uint32_t SMEM_KV_SIZE_PER_STAGE = kComputeBlockKV * kHeadDim * sizeof(__nv_fp8_e4m3);
+-    static constexpr uint32_t SMEM_KV_SCALE_SIZE_PER_STAGE = kComputeBlockKV * sizeof(float);
++    static constexpr uint32_t SMEM_KV_SIZE_PER_STAGE = BLOCK_KV * kHeadDim * sizeof(__nv_fp8_e4m3);
++    static constexpr uint32_t SMEM_KV_SCALE_SIZE_PER_STAGE = BLOCK_KV * sizeof(float);
+@@ -164,5 +138,3 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-    // Cluster CTAs split next_n and load KV independently, without TMA multicast.
+-    // Schedule by cluster while retaining the fixed 64-token compute block.
+-    auto scheduler = sched::SM90PagedMQALogitsScheduler<kNextN, kIsContextLens2D, kIsVarlen, kComputeBlockKV, kNumMathWarpGroups, 1>(
+-        cute::cluster_id_in_grid().x, batch_size, context_lens, schedule_meta, nullptr);
+-    DG_STATIC_ASSERT(SPLIT_KV % kComputeBlockKV == 0, "Unaligned SPLIT_KV");
++    auto scheduler = sched::SM90PagedMQALogitsScheduler<kNextN, kIsContextLens2D, kIsVarlen, BLOCK_KV, kNumMathWarpGroups, 1>(
++        blockIdx.x, batch_size, context_lens, schedule_meta, indices);
++    DG_STATIC_ASSERT(SPLIT_KV % BLOCK_KV == 0, "Unaligned SPLIT_KV");
+@@ -178 +149,0 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-    const uint32_t cta_rank_in_cluster = cute::block_rank_in_cluster();
+@@ -188,2 +159,2 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-                tma::copy<kHeadDim, kNextNPerCTA * kNumHeads, kHeadDim>(&tensor_map_q, full_q_barriers[stage_idx], smem_q[stage_idx], 0, (q_idx * kNextN + cta_rank_in_cluster * kNextNPerCTA) * kNumHeads);
+-                tma::copy<kNextNPerCTA * kNumHeads, 1, 0>(&tensor_map_weights, full_q_barriers[stage_idx], smem_weights[stage_idx], 0, q_idx * kNextN + cta_rank_in_cluster * kNextNPerCTA);
++                tma::copy<kHeadDim, kNextN * kNumHeads, kHeadDim>(&tensor_map_q, full_q_barriers[stage_idx], smem_q[stage_idx], 0, q_idx * kNextN * kNumHeads);
++                tma::copy<kNextN * kNumHeads, 1, 0>(&tensor_map_weights, full_q_barriers[stage_idx], smem_weights[stage_idx], 0, q_idx * kNextN);
+@@ -203,7 +173,0 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-        constexpr uint32_t kNumBlocksPerMMA = kComputeBlockKV / BLOCK_KV;
+-        DG_STATIC_ASSERT(kComputeBlockKV % BLOCK_KV == 0, "kComputeBlockKV must be a multiple of BLOCK_KV");
+-        DG_STATIC_ASSERT(kNumBlocksPerMMA <= 4, "Invalid BLOCK_KV");
+-
+-        using idx_storage_t = std::conditional_t<kNumBlocksPerMMA == 1, uint32_t,
+-                              std::conditional_t<kNumBlocksPerMMA == 2, uint2, uint4>>;
+-
+@@ -211 +175 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-        idx_storage_t kv_block_idx_storage;
++        uint32_t kv_block_idx_storage;
+@@ -213,0 +178,2 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
++            // Prefetch next Q when current Q changes
++            bool prefetch_q = (q_idx != next_q_idx and scheduler.exist_q_atom_idx(next_q_idx + 1));
+@@ -217,0 +184,7 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
++            // Wait Q consumer release and issue TMA Q
++            if (prefetch_q) {
++                CUTE_TIE_DECL(get_q_pipeline(q_iter_idx ++), q_stage_idx, q_phase);
++                empty_q_barriers[q_stage_idx]->wait(q_phase ^ 1);
++                issue_tma_q(q_stage_idx, q_idx + 1);
++            }
++
+@@ -222,12 +195,2 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-                const uint32_t compute_block_kv_offset = kv_idx + kv_group_idx + lane_idx * kNumMathWarpGroups;
+-                const uint32_t lens_idx = kIsContextLens2D ? q_idx * kNextN + kNextN - 1 : q_idx;
+-                const uint32_t num_kv_pages = math::ceil_div(context_lens[lens_idx], BLOCK_KV);
+-                const auto* block_table_row = block_table + q_idx * static_cast<uint64_t>(block_table_stride);
+-                auto* kv_block_idx_reg = reinterpret_cast<uint32_t*>(&kv_block_idx_storage);
+-                #pragma unroll
+-                for (uint32_t i = 0; i < kNumBlocksPerMMA; ++ i) {
+-                    const uint32_t page_offset = compute_block_kv_offset * kNumBlocksPerMMA + i;
+-                    kv_block_idx_reg[i] = (compute_block_kv_offset < num_kv and page_offset < num_kv_pages)
+-                        ? __ldg(block_table_row + page_offset)
+-                        : 0;
+-                }
++                kv_block_idx_storage = (kv_idx + kv_group_idx + lane_idx * kNumMathWarpGroups < num_kv ?
++                    block_table[q_idx * static_cast<uint64_t>(block_table_stride) + (kv_idx + kv_group_idx + lane_idx * kNumMathWarpGroups)] : 0);
+@@ -235 +198 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-            idx_storage_t kv_block_idx = sm90_paged_mqa_detail::shfl_sync(0xffffffff, kv_block_idx_storage, kv_block_idx_ptr ++);
++            const auto kv_block_idx = __shfl_sync(0xffffffff, kv_block_idx_storage, kv_block_idx_ptr ++);
+@@ -243,8 +206,4 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-                const auto* kv_block_idx_array = reinterpret_cast<const uint32_t*>(&kv_block_idx);
+-                #pragma unroll
+-                for (uint32_t i = 0; i < kNumBlocksPerMMA; ++ i) {
+-                    tma::copy<kHeadDim, BLOCK_KV, 0, __nv_fp8_e4m3, true>(&tensor_map_kv, full_kv_barriers[kv_stage_idx],
+-                        smem_kv[kv_stage_idx] + i * BLOCK_KV * kHeadDim, 0, 0, 1, kv_block_idx_array[i]);
+-                    tma::copy<BLOCK_KV, 1, 0>(&tensor_map_kv_scales, full_kv_barriers[kv_stage_idx],
+-                        smem_kv_scales[kv_stage_idx] + i * BLOCK_KV, 0, kv_block_idx_array[i]);
+-                }
++                tma::copy<kHeadDim, BLOCK_KV, 0, __nv_fp8_e4m3, true>(&tensor_map_kv, full_kv_barriers[kv_stage_idx],
++                                                                      smem_kv[kv_stage_idx], 0, 0, 1, kv_block_idx);
++                tma::copy<BLOCK_KV, 1, 0>(&tensor_map_kv_scales, full_kv_barriers[kv_stage_idx],
++                                          smem_kv_scales[kv_stage_idx], 0, kv_block_idx);
+@@ -256,8 +214,0 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-            // Drive Q prefetch from the scheduler's actual next task. The
+-            // scheduler may skip zero-context requests, so q_idx + 1 is not
+-            // necessarily the next Q consumed by the math warp-groups.
+-            if (fetched_next_task and q_idx != next_q_idx) {
+-                CUTE_TIE_DECL(get_q_pipeline(q_iter_idx ++), q_stage_idx, q_phase);
+-                empty_q_barriers[q_stage_idx]->wait(q_phase ^ 1);
+-                issue_tma_q(q_stage_idx, next_q_idx);
+-            }
+@@ -269 +220 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-        float accum[WGMMA::kNumAccum], weights[kNextNPerCTA][kNumHeads / 4];
++        float accum[WGMMA::kNumAccum], weights[kNextN][kNumHeads / 4];
+@@ -292 +243 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-                for (uint32_t i = 0; i < kNextNPerCTA; ++ i) {
++                for (uint32_t i = 0; i < kNextN; ++ i) {
+@@ -304 +255 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-            auto kv_offset = (q_idx * kNextN + cta_rank_in_cluster * kNextNPerCTA) * static_cast<uint64_t>(logits_stride) + ((kv_idx + kv_group_idx) * kComputeBlockKV + sub_warp_offset);
++            auto kv_offset = q_idx * kNextN * static_cast<uint64_t>(logits_stride) + ((kv_idx + kv_group_idx) * BLOCK_KV + sub_warp_offset);
+@@ -306 +257 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-            // Compute `[kNextNPerCTA * kNumHeads, kHeadDim] @ [kComputeBlockKV, kHeadDim] -> [kNextNPerCTA, kComputeBlockKV]`
++            // Compute `[kNextN * kNumHeads, kHeadDim] @ [BLOCK_KV, kHeadDim] -> [kNextN, BLOCK_KV]`
+@@ -311,0 +263 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
++            DG_STATIC_ASSERT(BLOCK_KV == 64, "Invalid block size");
+@@ -345 +297 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-            DG_STATIC_ASSERT(WGMMA::kNumAccum / kNumAccumPerReduce == kNextNPerCTA, "Invalid accumulation");
++            DG_STATIC_ASSERT(WGMMA::kNumAccum / kNumAccumPerReduce == kNextN, "Invalid accumulation");
+@@ -348 +300 @@ void sm90_fp8_paged_mqa_logits(const uint32_t batch_size,
+-            for (uint32_t i = 0; i < kNextNPerCTA; ++ i) {
++            for (uint32_t i = 0; i < kNextN; ++ i) {
+diff --git a/deep_gemm/include/deep_gemm/impls/sm90_mega_mhc.cuh b/deep_gemm/include/deep_gemm/impls/sm90_mega_mhc.cuh
+new file mode 100644
+index 0000000..9332d09
+--- /dev/null
++++ b/deep_gemm/include/deep_gemm/impls/sm90_mega_mhc.cuh
+@@ -0,0 +1,644 @@
++#pragma once
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wunknown-attributes"
++
++#include <cutlass/arch/barrier.h>
++#include <cutlass/arch/reg_reconfig.h>
++
++#include <deep_gemm/common/cute_tie.cuh>
++#include <deep_gemm/common/math.cuh>
++#include <deep_gemm/common/ring_pipeline.cuh>
++#include <deep_gemm/common/tma_copy.cuh>
++#include <deep_gemm/common/utils.cuh>
++#include <deep_gemm/layout/sm90_mega_mhc.cuh>
++#include <deep_gemm/mma/sm90.cuh>
++#include <deep_gemm/ptx/wgmma.cuh>
++#include <deep_gemm/ptx/ld_st.cuh>
++#include <deep_gemm/ptx/tma.cuh>
++#include <deep_gemm/ptx/utils.cuh>
++#include <deep_gemm/scheduler/mega_mhc.cuh>
++#include <deep_gemm/epilogue/sm100_mega_mhc.cuh>
++#include <deep_gemm/epilogue/sm90_mega_mhc.cuh>
++
++namespace deep_gemm {
++
++using namespace layout::mega_mhc;
++
++namespace mega_mhc {
++
++// A task is one (m-block, K-split) pair, subdivided into BLOCK_K blocks.
++// MMA_K is the per-route hidden width of one TF32 MMA instruction.
++constexpr uint32_t MMA_K = 32 / sizeof(float);
++constexpr uint32_t kNumTokenRowsPerLane = 2;
++
++} // namespace mega_mhc
++
++// Persistent mHC with static grid-stride roles and TMA-native layouts.
++// Norm receives one arrival only after Shifted X1 stores and statistics are committed.
++template <uint32_t kHidden, uint32_t kNumSplits, uint32_t kNumSMs,
++          bool kIsShifted, bool kStoreBF16, bool kStoreFP8, uint32_t SF_BLOCK_M>
++CUTLASS_GLOBAL void __launch_bounds__(kNumThreads, 1)
++    sm90_mega_mhc_impl(const __grid_constant__ cute::TmaDescriptor tensor_map_residual,
++                        const __grid_constant__ cute::TmaDescriptor tensor_map_x,
++                        const __grid_constant__ cute::TmaDescriptor tensor_map_fn,
++                        const __grid_constant__ cute::TmaDescriptor tensor_map_post_mix,
++                        const __grid_constant__ cute::TmaDescriptor tensor_map_comb_res_mix,
++                        const __grid_constant__ cute::TmaDescriptor tensor_map_shifted_prev_mix,
++                        const __grid_constant__ cute::TmaDescriptor tensor_map_new_residual,
++                        const __grid_constant__ cute::TmaDescriptor tensor_map_y_bf16,
++                        const __grid_constant__ MixArgs mix_args,
++                        const __grid_constant__ NormArgs norm_args,
++                        void* gmem_scratch,
++                        uint64_t* gmem_split_barriers) {
++#if (defined(__CUDA_ARCH__) and (__CUDA_ARCH__ >= 900 && __CUDA_ARCH__ < 1000)) or defined(__CLION_IDE__)
++    using namespace mega_mhc;
++    namespace geometry = layout::sm90_mega_mhc;
++    // Each Post worker occupies exactly one WG; the role dispatch hardwires two of them.
++    constexpr uint32_t kNumPostWGs = 2;
++
++    // Template checks
++    DG_STATIC_ASSERT(kHidden > 0 and kHidden % BLOCK_K == 0 and kNumSplits <= kHidden / BLOCK_K,
++                     "Splits must contain nonempty, aligned K blocks");
++    DG_STATIC_ASSERT(SF_BLOCK_M == 0 or kStoreFP8, "Shared SF requires FP8 output");
++
++    // Task geometry
++    constexpr uint32_t kNumKBlocksPerSplit = kHidden / BLOCK_K / kNumSplits;
++    constexpr uint32_t kNumLongSplits = kHidden / BLOCK_K % kNumSplits;
++    const auto get_task_k_begin = [&](const uint32_t split_idx) {
++        return split_idx * (kNumKBlocksPerSplit * BLOCK_K) + cute::min(split_idx, kNumLongSplits) * BLOCK_K;
++    };
++    const auto get_num_task_k_blocks = [&](const uint32_t split_idx) {
++        return kNumKBlocksPerSplit + (split_idx < kNumLongSplits);
++    };
++
++    // CTA role assignments
++    constexpr uint32_t kFirstPostWGIdx = 1;
++    constexpr uint32_t kWorkspaceEpilogueWGIdx = kFirstPostWGIdx + kNumPostWGs;
++    constexpr uint32_t kMixWGIdx = kWorkspaceEpilogueWGIdx + 1;
++    constexpr uint32_t kNormWGIdx = kMixWGIdx + 1;
++    constexpr uint32_t kNumWGsPerCTA = kNormWGIdx + 1;
++    constexpr uint32_t kNumPostWarps = kNumPostWGs * kNumWarpsPerWG;
++    DG_STATIC_ASSERT(kNumWGsPerCTA == 6, "Unexpected CTA topology");
++
++    // Register reconfigurations
++    constexpr uint32_t kNumControlRegisters = 32;
++    constexpr uint32_t kNumPostRegisters = kIsShifted ? 136 : 112;
++    constexpr uint32_t kNumLightweightRegisters = 32;
++    constexpr uint32_t kNumShiftedNormRegisters = 96;
++    constexpr uint32_t kNumNormalRegisters = 80;
++
++    // Account for the WGMMA accumulators and the lightweight Mix role.
++    constexpr uint32_t kStaticRoleRegisterBudget = kNumControlRegisters + kNumPostRegisters * kNumPostWGs +
++                                                   48 + kNumLightweightRegisters + kNumShiftedNormRegisters;
++    constexpr uint32_t kMaxRegisterBudget = cute::max(kStaticRoleRegisterBudget, kNumNormalRegisters * kNumWGsPerCTA);
++    DG_STATIC_ASSERT(kMaxRegisterBudget * 128 <= 64512, "Register reconfiguration exceeds the SM budget");
++    DG_STATIC_ASSERT(kMaxRegisterBudget <= 80 * kNumWGsPerCTA, "Register reconfiguration exceeds the CTA entry pool");
++
++    // Thread indices
++    const uint32_t warp_idx = cutlass::canonical_warp_idx_sync();
++    const uint32_t lane_idx = ptx::get_lane_idx();
++
++    // Post and workspace-epilogue warps share this mapping: each lane owns two rows and one column pair.
++    // NOTES: runtime indices are recomputed per role branch so no value stays live across the
++    // register reconfigurations (which would spill to local memory).
++    constexpr uint32_t kNumRowsPerWarp = BLOCK_M / kNumWarpsPerWG;
++    constexpr uint32_t kNumRowGroupsPerWarp = kNumRowsPerWarp / kNumTokenRowsPerLane;
++    constexpr uint32_t kNumLanesPerRowGroup = 32 / kNumRowGroupsPerWarp;
++    const auto get_first_row_idx = [&] {
++        return warp_idx % kNumWarpsPerWG * kNumRowsPerWarp + lane_idx / kNumLanesPerRowGroup;
++    };
++
++    // Runtime state
++    const uint32_t num_m_blocks = Workspace<kNumSplits>::get_num_m_blocks(norm_args.num_tokens);
++    const uint32_t num_tasks = num_m_blocks * kNumSplits;
++    Workspace<kNumSplits> workspace(gmem_scratch, num_m_blocks);
++
++    // Shared memory
++    extern __shared__ __align__(kSwizzleAlignment) uint8_t smem_buffer[];
++    auto& smem = *reinterpret_cast<geometry::SharedStorage*>(smem_buffer);
++
++    const auto init_barriers = [](auto& barriers, const uint32_t count) {
++        #pragma unroll
++        for (auto& barrier: barriers)
++            barrier.init(count);
++    };
++
++    // Descriptor cache hints and barriers are initialized once per persistent CTA.
++    if (warp_idx == 0 and cute::elect_one_sync()) {
++        smem.next_norm_task_ticket = 0;
++
++        // Normal aliases the shifted-only descriptors to valid maps, so prefetch unconditionally.
++        for (const auto& tensor_map: {&tensor_map_residual, &tensor_map_x, &tensor_map_fn,
++                                      &tensor_map_post_mix, &tensor_map_comb_res_mix,
++                                      &tensor_map_shifted_prev_mix, &tensor_map_new_residual,
++                                      &tensor_map_y_bf16})
++            cute::prefetch_tma_descriptor(tensor_map);
++
++        init_barriers(smem.full_io_barriers, 1);
++        init_barriers(smem.empty_io_barriers, 1);
++        init_barriers(smem.store_ready_io_barriers, kNumPostWarps);
++        init_barriers(smem.full_coeff_barriers, 1);
++        init_barriers(smem.empty_coeff_barriers, kNumPostWarps);
++        cutlass::arch::fence_barrier_init();
++    } else if (warp_idx == 1 and cute::elect_one_sync()) {
++        // Fn load pipeline.
++        init_barriers(smem.full_fn_barriers, 1);
++        init_barriers(smem.empty_fn_barriers, 128);
++        cutlass::arch::fence_barrier_init();
++    } else if (warp_idx == 2 and cute::elect_one_sync()) {
++        // MMA, Post, and workspace-epilogue pipelines.
++        init_barriers(smem.full_a_barriers, 128);
++        init_barriers(smem.empty_a_barriers, 128);
++        init_barriers(smem.full_accum_barriers, 1);
++        init_barriers(smem.empty_accum_barriers, kNumWarpsPerWG);
++
++        smem.full_stats_barrier.init(kNumPostWarps);
++        smem.empty_stats_barrier.init(kNumWarpsPerWG + (kIsShifted ? 1 : 0));
++        smem.mix_arrival_barrier.init(kNumWarpsPerWG + (kIsShifted ? 0 : 1));
++        cutlass::arch::fence_barrier_init();
++    }
++
++    // Local initialization can overlap the preceding grid, but persistent split barriers cannot.
++    cudaGridDependencySynchronize();
++    if (warp_idx == kFirstPostWGIdx * kNumWarpsPerWG + 1 and cute::elect_one_sync()) {
++        for (uint32_t m_block_idx = blockIdx.x; m_block_idx < num_m_blocks; m_block_idx += kNumSMs)
++            sched::mega_mhc::Mix::init(gmem_split_barriers, m_block_idx);
++    }
++    if constexpr (kIsShifted) {
++        if (warp_idx == kFirstPostWGIdx * kNumWarpsPerWG and cute::elect_one_sync()) {
++            for (uint32_t m_block_idx = blockIdx.x; m_block_idx < num_m_blocks; m_block_idx += kNumSMs)
++                sched::mega_mhc::Norm::init(gmem_split_barriers, m_block_idx);
++        }
++    }
++
++    __syncthreads();
++
++    // Static roles follow the execution graph: WG0 TMA, WG1-2 Post, WG3 WGMMA/epilogue, WG4 Mix, and WG5 Norm.
++    if (warp_idx < kFirstPostWGIdx * kNumWarpsPerWG) {
++        // WG0: producer pipelines
++        cutlass::arch::warpgroup_reg_dealloc<kNumControlRegisters>();
++
++        // IO and Fn warp workers follow the same task traversal; only their hidden-block copies differ.
++        const auto run_tma_load_worker = [&](auto& empty_barriers, const auto& load_hidden_block) {
++            constexpr uint32_t kNumStages = sizeof(empty_barriers) / sizeof(empty_barriers[0]);
++            RingPipeline<kNumStages> pipeline;
++
++            if (cute::elect_one_sync()) {
++                for (uint32_t task_idx = blockIdx.x; task_idx < num_tasks; task_idx += kNumSMs) {
++                    const uint32_t split_idx = task_idx % kNumSplits;
++                    const uint32_t num_task_k_blocks = get_num_task_k_blocks(split_idx);
++                    const uint32_t m_idx = task_idx / kNumSplits * BLOCK_M;
++
++                    #pragma unroll 1
++                    for (uint32_t k_block_idx = 0; k_block_idx < num_task_k_blocks; ++ k_block_idx) {
++                        CUTE_TIE_DECL(pipeline.advance(), stage_idx, stage_phase);
++                        empty_barriers[stage_idx].wait(stage_phase ^ 1u);
++                        load_hidden_block(stage_idx, get_task_k_begin(split_idx) + k_block_idx * BLOCK_K, m_idx);
++                    }
++                }
++            }
++            __syncwarp();
++        };
++
++        if (warp_idx == 0) {
++            // Warp 0: residual and X TMA-load worker
++            run_tma_load_worker(smem.empty_io_barriers,
++                [&](const uint32_t& stage_idx, const uint32_t& k_idx, const uint32_t& m_idx) {
++                    tma::copy<BLOCK_K, BLOCK_M, kSwizzleMode, nv_bfloat16, true>(
++                        &tensor_map_residual, &smem.full_io_barriers[stage_idx],
++                        reinterpret_cast<nv_bfloat16*>(smem.residual[stage_idx][0]), k_idx, m_idx);
++                    tma::copy<BLOCK_K, BLOCK_M, kSwizzleMode, nv_bfloat16>(
++                        &tensor_map_x, &smem.full_io_barriers[stage_idx],
++                        reinterpret_cast<nv_bfloat16*>(smem.x[stage_idx]), k_idx, m_idx);
++                    smem.full_io_barriers[stage_idx].arrive_and_expect_tx(sizeof(smem.residual[0]) + sizeof(smem.x[0]));
++                });
++        } else if (warp_idx == 1) {
++            // Warp 1: Fn TMA-load worker
++            run_tma_load_worker(smem.empty_fn_barriers,
++                [&](const uint32_t& stage_idx, const uint32_t& k_idx, const uint32_t&) {
++                    tma::copy<BLOCK_K, kNumRoutes * kNumHCOutputs, kSwizzleMode, float, true>(
++                        &tensor_map_fn, &smem.full_fn_barriers[stage_idx],
++                        smem.fn[stage_idx][0][0], k_idx, 0u);
++                    smem.full_fn_barriers[stage_idx].arrive_and_expect_tx(sizeof(smem.fn[0]));
++                });
++        } else if (warp_idx == 2) {
++            // The full WG3 owns Hopper WGMMA. This control warp retires early.
++        } else {
++            // Warp 3: output-store, coefficient-prefetch, and Norm-arrival worker
++            RingPipeline<geometry::kNumIOStages> io_pipeline;
++            RingPipeline<kNumCoeffStages> coeff_pipeline;
++
++            const auto issue_coeff_tma = [&](const uint32_t& m_idx, const uint32_t& stage_idx) {
++                tma::copy<kNumRoutes, BLOCK_M, 0, float>(&tensor_map_post_mix, &smem.full_coeff_barriers[stage_idx],
++                                                        smem.post_coeff[stage_idx][0], 0u, m_idx);
++                tma::copy<kNumRoutes * kNumRoutes, BLOCK_M, kSwizzleMode / 2, float>(
++                    &tensor_map_comb_res_mix, &smem.full_coeff_barriers[stage_idx], smem.comb_coeff[stage_idx][0], 0u, m_idx);
++                if constexpr (kIsShifted)
++                    tma::copy<kNumRoutes, BLOCK_M, 0, float>(&tensor_map_shifted_prev_mix, &smem.full_coeff_barriers[stage_idx],
++                                                             smem.pre_coeff[stage_idx][0], 0u, m_idx);
++                smem.full_coeff_barriers[stage_idx].arrive_and_expect_tx(sizeof(smem.post_coeff[0]) + sizeof(smem.comb_coeff[0]) +
++                                                                         (kIsShifted ? sizeof(smem.pre_coeff[0]) : 0));
++            };
++
++            // The coefficient ring advances once per task, independently of the per-block IO ring.
++            auto advance_coeff_pipeline = [&]() {
++                CUTE_TIE_DECL(coeff_pipeline.advance(), stage_idx, phase);
++                smem.empty_coeff_barriers[stage_idx].wait(phase ^ 1u);
++                return stage_idx;
++            };
++
++            // The first task has no preceding store-drain window, so seed its coefficients here.
++            if (blockIdx.x < num_tasks) {
++                const uint32_t coeff_stage_idx = advance_coeff_pipeline();
++                if (cute::elect_one_sync())
++                    issue_coeff_tma(blockIdx.x / kNumSplits * BLOCK_M, coeff_stage_idx);
++                __syncwarp();
++            }
++
++            for (uint32_t task_idx = blockIdx.x, task_phase = 0; task_idx < num_tasks; task_idx += kNumSMs, task_phase ^= 1u) {
++                const uint32_t split_idx = task_idx % kNumSplits;
++                const uint32_t num_task_k_blocks = get_num_task_k_blocks(split_idx);
++                const uint32_t m_block_idx = task_idx / kNumSplits;
++                if constexpr (kIsShifted)
++                    sched::mega_mhc::Norm::wait_init<kNumSplits>(gmem_split_barriers, m_block_idx);
++                uint32_t next_coeff_stage_idx = 0;
++
++                #pragma unroll 1
++                for (uint32_t k_block_idx = 0; k_block_idx < num_task_k_blocks; ++ k_block_idx) {
++                    // Wait for all Post route stores of this hidden block
++                    CUTE_TIE_DECL(io_pipeline.advance(), io_stage_idx, io_phase);
++                    smem.store_ready_io_barriers[io_stage_idx].wait(io_phase);
++
++                    const uint32_t k_idx = get_task_k_begin(split_idx) + k_block_idx * BLOCK_K;
++                    const uint32_t m_idx = m_block_idx * BLOCK_M;
++                    const bool should_prefetch_next_coeff =
++                        k_block_idx == num_task_k_blocks - 1 and task_idx + kNumSMs < num_tasks;
++
++                    // Wait for a reusable slot before entering the final store-drain overlap window.
++                    if (should_prefetch_next_coeff)
++                        next_coeff_stage_idx = advance_coeff_pipeline();
++
++                    if (cute::elect_one_sync()) {
++                        // New residual is re-read by the fused Normal workers, so it stays in L2
++                        // (EVICT_LAST); Shifted consumes it only in the next layer.
++                        cute::SM90_TMA_STORE_3D::copy(&tensor_map_new_residual,
++                            smem.residual[io_stage_idx][0], k_idx, m_idx, 0u);
++                        if constexpr (kIsShifted)
++                            cute::SM90_TMA_STORE_2D::copy(&tensor_map_y_bf16,
++                                smem.x[io_stage_idx], k_idx, m_idx);
++
++                        cute::tma_store_arrive();
++                        // Issue next-task coefficients here to avoid competing with the task's main TMA wave.
++                        if (should_prefetch_next_coeff)
++                            issue_coeff_tma((task_idx + kNumSMs) / kNumSplits * BLOCK_M, next_coeff_stage_idx);
++
++                        // Complete the destination writes before releasing this IO stage.
++                        ptx::tma_store_wait<0>();
++                        smem.empty_io_barriers[io_stage_idx].arrive();
++                    }
++                }
++
++                if constexpr (kIsShifted) {
++                    // Arrive at Norm only after both Post workers have committed their row statistics.
++                    smem.full_stats_barrier.wait(task_phase);
++                    const auto x1_sqr_sum_partial = workspace.get_x1_sqr_sum_partial_ptr(task_idx);
++                    float2 row_sqr_sums = {};
++                    #pragma unroll
++                    for (uint32_t post_worker_idx = 0; post_worker_idx < kNumPostWGs; ++ post_worker_idx) {
++                        row_sqr_sums.x += smem.x1_sqr_sums[post_worker_idx][lane_idx];
++                        row_sqr_sums.y += smem.x1_sqr_sums[post_worker_idx][lane_idx + 32];
++                    }
++
++                    x1_sqr_sum_partial[lane_idx] = row_sqr_sums.x;
++                    x1_sqr_sum_partial[lane_idx + 32] = row_sqr_sums.y;
++                    __syncwarp();
++                    if (cute::elect_one_sync()) {
++                        smem.empty_stats_barrier.arrive();
++                        sched::mega_mhc::Norm::arrive<kNumSplits>(gmem_split_barriers, m_block_idx);
++                    }
++                } else if (cute::elect_one_sync()) {
++                    smem.mix_arrival_barrier.arrive();
++                }
++            }
++        }
++    } else if (warp_idx < kWorkspaceEpilogueWGIdx * kNumWarpsPerWG) {
++        // WG1-2: Post workers, one per WG
++        const auto get_bf16x2_offset = [](const uint32_t& row_idx, const uint32_t& col_idx) {
++            constexpr uint32_t kNumColsPerRow = kSwizzleMode / sizeof(nv_bfloat162);
++            constexpr uint32_t kNumColsPerBank = 16 / sizeof(nv_bfloat162);
++            const uint32_t bank_group_idx = (col_idx / kNumColsPerBank) ^ (row_idx & (kSwizzleMode / 16 - 1));
++            return row_idx * kNumColsPerRow + bank_group_idx * kNumColsPerBank + col_idx % kNumColsPerBank;
++        };
++
++        // Comb rows use a separate 64B swizzle to distribute each four-float group across banks.
++        const auto load_comb_coeff = [](const float* row, const uint32_t& row_idx, const uint32_t& coeff_idx) {
++            const uint32_t bank_group_idx = (coeff_idx / 4) ^ ((row_idx / 2) & 3);
++            return row[bank_group_idx * 4 + coeff_idx % 4];
++        };
++
++        DG_STATIC_ASSERT(MMA_K % kNumLanesPerRowGroup == 0, "Invalid Post geometry");
++
++        const auto run_post_worker = [&](auto post_worker) {
++            constexpr uint32_t kPostWorkerIdx = decltype(post_worker)::value;
++            cutlass::arch::warpgroup_reg_alloc<kNumPostRegisters>();
++            const uint32_t col_pair_idx = lane_idx & (kNumLanesPerRowGroup - 1);
++            const uint32_t first_row_idx = get_first_row_idx();
++            const uint32_t row_indices[kNumTokenRowsPerLane] = {first_row_idx, first_row_idx + kNumRowGroupsPerWarp};
++
++            RingPipeline<geometry::kNumIOStages> io_pipeline;
++            RingPipeline<kNumAStages> a_pipeline;
++            RingPipeline<kNumCoeffStages> coeff_pipeline;
++
++            // Each Post worker maps to one WG; offset them so their A stages interleave.
++            a_pipeline.advance(kPostWorkerIdx);
++
++            for (uint32_t task_idx = blockIdx.x, task_phase = 0; task_idx < num_tasks; task_idx += kNumSMs, task_phase ^= 1u) {
++                const uint32_t split_idx = task_idx % kNumSplits;
++                const uint32_t num_task_k_blocks = get_num_task_k_blocks(split_idx);
++
++                CUTE_TIE_DECL(coeff_pipeline.advance(), coeff_stage_idx, coeff_phase);
++                float2 hc_norm_sqr_sums[kNumTokenRowsPerLane] = {};
++                float2 x1_sqr_sums[kNumTokenRowsPerLane] = {};
++
++                // Coefficients stay in registers for every hidden block, so release their SMEM stage immediately.
++                smem.full_coeff_barriers[coeff_stage_idx].wait(coeff_phase);
++                float2 row_pre_coeff[kNumRoutes];
++                float2 row_post_coeff[kNumRoutes];
++                #pragma unroll
++                for (uint32_t route_idx = 0; route_idx < kNumRoutes; ++ route_idx) {
++                    if constexpr (kIsShifted)
++                        row_pre_coeff[route_idx] = {smem.pre_coeff[coeff_stage_idx][row_indices[0]][route_idx],
++                                                    smem.pre_coeff[coeff_stage_idx][row_indices[1]][route_idx]};
++                    row_post_coeff[route_idx] = {smem.post_coeff[coeff_stage_idx][row_indices[0]][route_idx],
++                                                 smem.post_coeff[coeff_stage_idx][row_indices[1]][route_idx]};
++                }
++
++                float2 row_comb_coeff[kNumRoutes * kNumRoutes];
++                #pragma unroll
++                for (uint32_t coeff_idx = 0; coeff_idx < kNumRoutes * kNumRoutes; ++ coeff_idx)
++                    row_comb_coeff[coeff_idx] = {load_comb_coeff(smem.comb_coeff[coeff_stage_idx][row_indices[0]], row_indices[0], coeff_idx),
++                                                 load_comb_coeff(smem.comb_coeff[coeff_stage_idx][row_indices[1]], row_indices[1], coeff_idx)};
++
++                __syncwarp();
++                if (cute::elect_one_sync()) {
++
++
++                    cutlass::arch::fence_view_async_shared();
++                    smem.empty_coeff_barriers[coeff_stage_idx].arrive();
++                }
++
++                // Round-robin MMA atoms across Post workers and retain statistics until the split ends.
++                #pragma unroll 1
++                for (uint32_t k_block_idx = 0; k_block_idx < num_task_k_blocks; ++ k_block_idx) {
++                    // Wait TMA residual and X arrival
++                    CUTE_TIE_DECL(io_pipeline.advance(), io_stage_idx, io_phase);
++                    smem.full_io_barriers[io_stage_idx].wait(io_phase);
++
++                    #pragma unroll 2
++                    for (uint32_t mma_k_idx = kPostWorkerIdx; mma_k_idx < BLOCK_K / MMA_K;
++                         mma_k_idx += kNumPostWGs) {
++                        const uint32_t hidden_pair_idx = mma_k_idx * (MMA_K / 2) +
++                                                         col_pair_idx * (MMA_K / kNumLanesPerRowGroup / 2);
++                        float2 x[kNumTokenRowsPerLane];
++                        float2 residual[kNumTokenRowsPerLane][kNumRoutes];
++                        #pragma unroll
++                        for (uint32_t row_idx = 0; row_idx < kNumTokenRowsPerLane; ++ row_idx) {
++                            x[row_idx] = __bfloat1622float2(
++                                smem.x[io_stage_idx][get_bf16x2_offset(row_indices[row_idx], hidden_pair_idx)]);
++                            #pragma unroll
++                            for (uint32_t input_route_idx = 0; input_route_idx < kNumRoutes; ++ input_route_idx)
++                                residual[row_idx][input_route_idx] = __bfloat1622float2(
++                                    smem.residual[io_stage_idx][input_route_idx][get_bf16x2_offset(row_indices[row_idx], hidden_pair_idx)]);
++                        }
++
++                        // Wait MMA release of this worker's next A stage
++                        CUTE_TIE_DECL(a_pipeline.advance(kNumPostWGs), a_stage_idx, a_phase);
++                        smem.empty_a_barriers[a_stage_idx].wait(a_phase ^ 1u);
++
++                        float2 x1[kNumTokenRowsPerLane] = {};
++                        float2 post_values[kNumRoutes][kNumTokenRowsPerLane];
++                        #pragma unroll
++                        for (uint32_t row_idx = 0; row_idx < kNumTokenRowsPerLane; ++ row_idx) {
++                            #pragma unroll
++                            for (uint32_t output_route_idx = 0; output_route_idx < kNumRoutes; ++ output_route_idx) {
++                                const float2 post = row_post_coeff[output_route_idx];
++                                const float post_coeff = row_idx == 0 ? post.x : post.y;
++                                auto& post_value = post_values[output_route_idx][row_idx];
++                                post_value = math::mul_fp32x2_rn(x[row_idx], {post_coeff, post_coeff});
++                                #pragma unroll
++                                for (uint32_t input_route_idx = 0; input_route_idx < kNumRoutes; ++ input_route_idx) {
++                                    const uint32_t comb_idx = input_route_idx * kNumRoutes + output_route_idx;
++                                    const float2 comb = row_comb_coeff[comb_idx];
++                                    const float coeff = row_idx == 0 ? comb.x : comb.y;
++                                    post_value = math::fma_fp32x2_rn(residual[row_idx][input_route_idx], {coeff, coeff}, post_value);
++                                }
++                                // NOTES: this BF16 round is the shared numerical boundary for all consumers.
++                                const nv_bfloat162 post_value_bf16 = __float22bfloat162_rn(post_value);
++                                post_value = __bfloat1622float2(post_value_bf16);
++                                smem.residual[io_stage_idx][output_route_idx][
++                                    get_bf16x2_offset(row_indices[row_idx], hidden_pair_idx)] = post_value_bf16;
++                                hc_norm_sqr_sums[row_idx] = math::fma_fp32x2_rn(post_value, post_value, hc_norm_sqr_sums[row_idx]);
++                                if constexpr (kIsShifted) {
++                                    const float2 pre = row_pre_coeff[output_route_idx];
++                                    const float coeff = row_idx == 0 ? pre.x : pre.y;
++                                    x1[row_idx] = math::fma_fp32x2_rn(post_value, {coeff, coeff}, x1[row_idx]);
++                                }
++                            }
++                        }
++
++                        #pragma unroll
++                        for (uint32_t r = 0; r < kNumRoutes; ++r) {
++                            #pragma unroll
++                            for (uint32_t row = 0; row < kNumTokenRowsPerLane; ++row) {
++                                const uint32_t col = col_pair_idx * 2;
++                                const uint32_t offset = row_indices[row] * MMA_K +
++                                    (col ^ (((row_indices[row] >> 2u) & 1u) * 4u));
++                                *reinterpret_cast<float2*>(&smem.a[a_stage_idx][r][offset]) = post_values[r][row];
++                            }
++                        }
++
++                        if constexpr (kIsShifted) {
++                            #pragma unroll
++                            for (uint32_t row_idx = 0; row_idx < kNumTokenRowsPerLane; ++ row_idx) {
++                                const nv_bfloat162 x1_bf16 = __float22bfloat162_rn(x1[row_idx]);
++                                // Accumulate statistics from the rounded BF16 X1 values.
++                                ptx::accumulate_square(x1_sqr_sums[row_idx], x1_bf16);
++                                smem.x[io_stage_idx][get_bf16x2_offset(row_indices[row_idx], hidden_pair_idx)] = x1_bf16;
++                            }
++                        }
++
++                        // Publish generic shared stores to the asynchronous WGMMA proxy.
++                        cute::tma_store_fence();
++                        smem.full_a_barriers[a_stage_idx].arrive();
++                    }
++
++                    // Make generic-proxy writes visible before the output-store warp reads through the TMA async proxy.
++                    __syncwarp();
++                    if (cute::elect_one_sync()) {
++                        cute::tma_store_fence();
++                        smem.store_ready_io_barriers[io_stage_idx].arrive();
++                    }
++                }
++
++                // Wait only when register-held statistics are committed to shared rows reused by the next task.
++                smem.empty_stats_barrier.wait(task_phase ^ 1u);
++
++                // Four lanes own both column pairs of a row, independent of token batch size and SM scheduling.
++                const float reduced_hc_norm_0 = math::warp_reduce_sum<kNumLanesPerRowGroup>(hc_norm_sqr_sums[0].x + hc_norm_sqr_sums[0].y);
++                const float reduced_hc_norm_1 = math::warp_reduce_sum<kNumLanesPerRowGroup>(hc_norm_sqr_sums[1].x + hc_norm_sqr_sums[1].y);
++                float reduced_x1_0, reduced_x1_1;
++                if constexpr (kIsShifted) {
++                    reduced_x1_0 = math::warp_reduce_sum<kNumLanesPerRowGroup>(x1_sqr_sums[0].x + x1_sqr_sums[0].y);
++                    reduced_x1_1 = math::warp_reduce_sum<kNumLanesPerRowGroup>(x1_sqr_sums[1].x + x1_sqr_sums[1].y);
++                }
++
++                smem.hc_norm_sqr_sums[kPostWorkerIdx][row_indices[0]] = reduced_hc_norm_0;
++                smem.hc_norm_sqr_sums[kPostWorkerIdx][row_indices[1]] = reduced_hc_norm_1;
++                if constexpr (kIsShifted) {
++                    smem.x1_sqr_sums[kPostWorkerIdx][row_indices[0]] = reduced_x1_0;
++                    smem.x1_sqr_sums[kPostWorkerIdx][row_indices[1]] = reduced_x1_1;
++                }
++                __syncwarp();
++
++                if (cute::elect_one_sync())
++                    smem.full_stats_barrier.arrive();
++                __syncwarp();
++            }
++        };
++        warp_idx < (kFirstPostWGIdx + 1) * kNumWarpsPerWG ?
++            run_post_worker(cute::Int<0>{}) : run_post_worker(cute::Int<1>{});
++        cutlass::arch::warpgroup_reg_dealloc<kNumLightweightRegisters>();
++    } else if (warp_idx < kMixWGIdx * kNumWarpsPerWG) {
++        // WG3: full-warpgroup WGMMA and its workspace epilogue.
++        cutlass::arch::warpgroup_reg_dealloc<48>();
++        using WGMMA = mma::sm90::FP8MMA<24,
++            cute::SM90::GMMA::MMA_64x24x8_F32TF32TF32_SS_TN<>>;
++        const uint32_t warp_idx_in_wg = warp_idx % kNumWarpsPerWG;
++        const uint32_t col_pair_idx = lane_idx & 3u;
++        const uint32_t first_row_idx = get_first_row_idx();
++        const uint32_t row_indices[2] = {first_row_idx, first_row_idx + 8};
++        RingPipeline<kNumFnStages> fn_pipeline;
++        RingPipeline<kNumAStages> a_pipeline;
++        for (uint32_t task_idx = blockIdx.x, task_phase = 0; task_idx < num_tasks; task_idx += kNumSMs, task_phase ^= 1u) {
++            const uint32_t m_block_idx = task_idx / kNumSplits;
++            const uint32_t split_idx = task_idx % kNumSplits;
++            if (warp_idx_in_wg == 0)
++                sched::mega_mhc::Mix::wait_init<kNumSplits>(gmem_split_barriers, m_block_idx);
++            float accum[12] = {};
++            const uint32_t num_k_blocks = get_num_task_k_blocks(split_idx);
++            #pragma unroll 1
++            for (uint32_t kb = 0; kb < num_k_blocks; ++kb) {
++                CUTE_TIE_DECL(fn_pipeline.advance(), fn_stage_idx, fn_phase);
++                smem.full_fn_barriers[fn_stage_idx].wait(fn_phase);
++                #pragma unroll 1
++                for (uint32_t atom = 0; atom < BLOCK_K / MMA_K; ++atom) {
++                    CUTE_TIE_DECL(a_pipeline.advance(), a_stage_idx, a_phase);
++                    smem.full_a_barriers[a_stage_idx].wait(a_phase);
++                    #pragma unroll
++                    for (auto& v: accum) ptx::warpgroup_fence_operand(v);
++                    ptx::warpgroup_arrive();
++                    #pragma unroll
++                    for (uint32_t r = 0; r < kNumRoutes; ++r) {
++                        auto a_desc = mma::sm90::make_gmma_desc<cute::UMMA::Major::K, BLOCK_M, MMA_K, 32>(
++                            smem.a[a_stage_idx][r], 0, 0);
++                        auto b_desc = mma::sm90::make_smem_desc(
++                            smem.fn[fn_stage_idx][atom / 4][r] + (atom % 4) * MMA_K, 1);
++                        WGMMA::wgmma(a_desc, b_desc, accum, kb > 0 || atom > 0 || r > 0);
++                    }
++                    ptx::warpgroup_commit_batch();
++                    // Both shared operands stay live until all four warps drain WGMMA.
++                    ptx::warpgroup_wait<0>();
++                    #pragma unroll
++                    for (auto& v: accum) ptx::warpgroup_fence_operand(v);
++                    smem.empty_a_barriers[a_stage_idx].arrive();
++                }
++                smem.empty_fn_barriers[fn_stage_idx].arrive();
++            }
++            auto partial = workspace.get_gemm_partial_ptr(task_idx);
++            #pragma unroll
++            for (uint32_t n = 0; n < 3; ++n) {
++                *reinterpret_cast<float2*>(partial + row_indices[0] * BLOCK_N + n * 8 + col_pair_idx * 2) =
++                    {accum[n * 4], accum[n * 4 + 1]};
++                *reinterpret_cast<float2*>(partial + row_indices[1] * BLOCK_N + n * 8 + col_pair_idx * 2) =
++                    {accum[n * 4 + 2], accum[n * 4 + 3]};
++            }
++
++            // Gate this split's Mix arrival on all four epilogue warps and, in Normal, the output-store warp.
++            smem.full_stats_barrier.wait(task_phase);
++
++            if (lane_idx < kNumRowsPerWarp) {
++                const uint32_t row_idx = warp_idx_in_wg * kNumRowsPerWarp + lane_idx;
++                const auto hc_norm_sqr_sum_partial = workspace.get_hc_norm_sqr_sum_partial_ptr(task_idx);
++                float row_hc_norm_sqr_sum = 0.0f;
++                #pragma unroll
++                for (uint32_t post_worker_idx = 0; post_worker_idx < kNumPostWGs; ++ post_worker_idx)
++                    row_hc_norm_sqr_sum += smem.hc_norm_sqr_sums[post_worker_idx][row_idx];
++                hc_norm_sqr_sum_partial[row_idx] = row_hc_norm_sqr_sum;
++            }
++
++            __syncwarp();
++            if (cute::elect_one_sync()) {
++                smem.empty_stats_barrier.arrive();
++                smem.mix_arrival_barrier.arrive();
++            }
++
++            if (warp_idx_in_wg == 0) {
++                smem.mix_arrival_barrier.wait(task_phase);
++                if (cute::elect_one_sync())
++                    sched::mega_mhc::Mix::arrive<kNumSplits>(gmem_split_barriers, m_block_idx);
++            }
++        }
++    } else if (warp_idx < kNormWGIdx * kNumWarpsPerWG) {
++        // WG4: shifted Mix; one warp per token or one WG per decode token
++        if constexpr (kIsShifted) {
++            cutlass::arch::warpgroup_reg_dealloc<kNumLightweightRegisters>();
++            const uint32_t warp_idx_in_mix_wg = warp_idx - kMixWGIdx * kNumWarpsPerWG;
++            // Deterministic mode fixes 16 splits and retains the serial reduction
++            // order across batch sizes. Large prefill keeps its warp-per-token path.
++            if (kNumSplits > kDefaultNumSplits && norm_args.num_tokens >= 16 && norm_args.num_tokens <= BLOCK_M) {
++                for (uint32_t token_idx = blockIdx.x; token_idx < norm_args.num_tokens; token_idx += kNumSMs)
++                    epilogue::sm90_mega_mhc::run_shifted_mix_task_wg<kHidden>(
++                        smem, workspace, gmem_split_barriers, mix_args, token_idx, warp_idx_in_mix_wg, lane_idx);
++            } else {
++                for (uint32_t token_idx = blockIdx.x * kNumWarpsPerWG + warp_idx_in_mix_wg;
++                     token_idx < norm_args.num_tokens; token_idx += kNumSMs * kNumWarpsPerWG)
++                    epilogue::mega_mhc::run_mix_task<kHidden, true>(
++                        workspace, gmem_split_barriers, mix_args, token_idx, lane_idx);
++            }
++        }
++    }
++
++    if constexpr (not kIsShifted) {
++        // Normal repurposes WG4-5 immediately and each producer WG as soon as its static role retires.
++        if (warp_idx >= kMixWGIdx * kNumWarpsPerWG)
++            cutlass::arch::warpgroup_reg_dealloc<kNumLightweightRegisters>();
++
++        const uint32_t wg_idx_in_cta = warp_idx / kNumWarpsPerWG;
++
++        // Each Normal worker owns a distinct named barrier.
++        cutlass::arch::NamedBarrier::sync(128, 1 + wg_idx_in_cta);
++        cutlass::arch::warpgroup_reg_alloc<kNumNormalRegisters>();
++
++        epilogue::mega_mhc::run_normal_worker<kHidden, kNumSMs, kStoreBF16, kStoreFP8, SF_BLOCK_M>(
++            smem, workspace, wg_idx_in_cta, warp_idx % kNumWarpsPerWG, lane_idx,
++            gmem_split_barriers, mix_args, norm_args);
++        cutlass::arch::warpgroup_reg_dealloc<kNumControlRegisters>();
++    } else {
++        // WG5 starts immediately; retired Post workers join the same Norm task queue.
++        const uint32_t wg_idx = warp_idx / kNumWarpsPerWG;
++        if ((wg_idx >= kFirstPostWGIdx and wg_idx < kWorkspaceEpilogueWGIdx) or wg_idx == kNormWGIdx) {
++            epilogue::mega_mhc::run_shifted_norm_worker<kHidden, kNumSMs, kNumShiftedNormRegisters,
++                                                        kStoreBF16, kStoreFP8, SF_BLOCK_M>(
++                smem, workspace, gmem_split_barriers, norm_args, lane_idx);
++        }
++    }
++
++    __syncthreads();
++#else
++    if (blockIdx.x == 0 and threadIdx.x == 0)
++        DG_DEVICE_ASSERT(false and "This kernel only supports sm_90a");
++#endif
++}
++
++} // namespace deep_gemm
++#pragma clang diagnostic pop
+diff --git a/deep_gemm/include/deep_gemm/layout/mega_mhc.cuh b/deep_gemm/include/deep_gemm/layout/mega_mhc.cuh
+index de59a59..f29727c 100644
+--- a/deep_gemm/include/deep_gemm/layout/mega_mhc.cuh
++++ b/deep_gemm/include/deep_gemm/layout/mega_mhc.cuh
+@@ -2,0 +3 @@
++#include <cuda_fp8.h>
+@@ -36,0 +38 @@ static constexpr uint32_t kNumMaxSplits = 64;
++static constexpr uint32_t kNumMaxSM90Splits = 128;
+@@ -40,0 +43,6 @@ static constexpr uint32_t kNumMaxMBlocks = math::constexpr_ceil_div(kNumMaxToken
++// A barrier line holds one 8-byte state; the execution epoch and the exit count
++// live in the unused tail of the buffer's first line, so the buffer is unchanged.
++static constexpr uint64_t kSplitBarrierEpochOffset = kSplitBarrierLineBytes / 2;
++static constexpr uint64_t kSplitBarrierExitCountOffset = kSplitBarrierEpochOffset + sizeof(uint64_t);
++DG_STATIC_ASSERT(kSplitBarrierExitCountOffset + sizeof(uint32_t) <= kSplitBarrierLineBytes,
++                 "Epoch and exit count must fit in the first barrier line");
+@@ -85 +93 @@ struct Workspace {
+-    DG_STATIC_ASSERT(kNumSplits <= kNumMaxSplits, "The number of splits exceeds the supported maximum");
++    DG_STATIC_ASSERT(kNumSplits <= kNumMaxSM90Splits, "The number of splits exceeds the supported maximum");
+diff --git a/deep_gemm/include/deep_gemm/layout/sm90_mega_mhc.cuh b/deep_gemm/include/deep_gemm/layout/sm90_mega_mhc.cuh
+new file mode 100644
+index 0000000..e40b945
+--- /dev/null
++++ b/deep_gemm/include/deep_gemm/layout/sm90_mega_mhc.cuh
+@@ -0,0 +1,63 @@
++#pragma once
++#include <deep_gemm/layout/mega_mhc.cuh>
++
++namespace deep_gemm::layout::sm90_mega_mhc {
++using namespace deep_gemm::layout::mega_mhc;
++// Three IO stages leave space for the four-stage shared A ring on Hopper.
++static constexpr uint32_t kNumIOStages = 3;
++struct SharedStorage {
++    using Barrier = cutlass::arch::ClusterTransactionBarrier;
++
++    // Route-major TMA layouts keep every 64 x 64 destination contiguous.
++    alignas(kSwizzleAlignment) nv_bfloat162 residual[kNumIOStages][kNumRoutes][BLOCK_M * BLOCK_K / 2];
++    alignas(kSwizzleAlignment) nv_bfloat162 x[kNumIOStages][BLOCK_M * BLOCK_K / 2];
++
++    // Each Fn TMA fills all routes for one 32-element TF32 swizzle atom.
++    alignas(kSwizzleAlignment) float fn[kNumFnStages][BLOCK_K / kFnAtomK][kNumRoutes][kNumHCOutputs * kFnAtomK];
++
++    // Coeff tensors retain their TMA-native per-token layouts.
++    alignas(kSwizzleMode) float pre_coeff[kNumCoeffStages][BLOCK_M][kNumRoutes];
++    alignas(kSwizzleMode) float post_coeff[kNumCoeffStages][BLOCK_M][kNumRoutes];
++    alignas(kSwizzleMode) float comb_coeff[kNumCoeffStages][BLOCK_M][kNumRoutes * kNumRoutes];
++
++    // Post workers own independent partials reduced before the Mix/Norm barrier arrivals.
++    alignas(kSwizzleMode) float hc_norm_sqr_sums[2][BLOCK_M];
++    alignas(kSwizzleMode) float x1_sqr_sums[2][BLOCK_M];
++    // Normal workers and shifted decode Mix are mutually exclusive. The larger
++    // view fits the padding before A, keeping the total shared allocation fixed.
++    union {
++        alignas(kSwizzleMode) float normal_scratch[BLOCK_M];
++        alignas(kSwizzleMode) float mix_scratch[kNumWarpsPerWG][32];
++    };
++
++    // Four TF32 A atoms, each in a WGMMA-compatible 32-byte swizzle.
++    alignas(1024) float a[kNumAStages][kNumRoutes][BLOCK_M * 8];
++
++    // Full/empty pairs connect static roles without CTA-wide block-boundary synchronization.
++    alignas(Barrier) Barrier full_io_barriers[kNumIOStages];
++    alignas(Barrier) Barrier empty_io_barriers[kNumIOStages];
++    alignas(Barrier) Barrier store_ready_io_barriers[kNumIOStages];
++
++    alignas(Barrier) Barrier full_fn_barriers[kNumFnStages];
++    alignas(Barrier) Barrier empty_fn_barriers[kNumFnStages];
++
++    alignas(Barrier) Barrier full_a_barriers[kNumAStages];
++    alignas(Barrier) Barrier empty_a_barriers[kNumAStages];
++
++    alignas(Barrier) Barrier full_accum_barriers[kNumAccumStages];
++    alignas(Barrier) Barrier empty_accum_barriers[kNumAccumStages];
++
++    alignas(Barrier) Barrier full_coeff_barriers[kNumCoeffStages];
++    alignas(Barrier) Barrier empty_coeff_barriers[kNumCoeffStages];
++
++    alignas(Barrier) Barrier full_stats_barrier;
++    alignas(Barrier) Barrier empty_stats_barrier;
++
++    // Gate each split's Mix arrival on all WG3 warps and, in Normal, the output-store worker.
++    alignas(Barrier) Barrier mix_arrival_barrier;
++    // Shifted Norm and fused Normal workers share this mutually exclusive task queue.
++    alignas(uint32_t) uint32_t next_norm_task_ticket;
++};
++
++
++} // namespace deep_gemm::layout::sm90_mega_mhc
+diff --git a/deep_gemm/include/deep_gemm/ptx/ld_st.cuh b/deep_gemm/include/deep_gemm/ptx/ld_st.cuh
+index 882d830..8e236be 100644
+--- a/deep_gemm/include/deep_gemm/ptx/ld_st.cuh
++++ b/deep_gemm/include/deep_gemm/ptx/ld_st.cuh
+@@ -10,0 +11,18 @@ namespace deep_gemm::ptx {
++CUTLASS_DEVICE uint32_t cvt_rs_bf16x2_f32(const float& lower, const float& upper,
++                                          const uint32_t& random_bits) {
++    uint32_t packed;
++    asm volatile("cvt.rs.bf16x2.f32 %0, %1, %2, %3;\n"
++                 : "=r"(packed) : "f"(upper), "f"(lower), "r"(random_bits));
++    return packed;
++}
++
++// Symmetric clamp for a nonnegative bound: retain the input sign and propagate NaNs.
++CUTLASS_DEVICE nv_bfloat162 clamp_bf16x2(const nv_bfloat162& value, const nv_bfloat162& bound) {
++    uint32_t packed;
++    asm("min.NaN.xorsign.abs.bf16x2 %0, %1, %2;"
++        : "=r"(packed)
++        : "r"(reinterpret_cast<const uint32_t&>(value)),
++          "r"(reinterpret_cast<const uint32_t&>(bound)));
++    return reinterpret_cast<const nv_bfloat162&>(packed);
++}
++
+@@ -172,0 +191,19 @@ CUTLASS_DEVICE void cp_async_cg(const uint4* global_ptr, uint4* shared_ptr) {
++// Copies the first `num_src_bytes` (0 to 16) bytes and zero-fills the rest of the 16-byte destination
++template <uint32_t kNumL2PrefetchBytes>
++CUTLASS_DEVICE void cp_async_cg_zfill(const uint4* global_ptr, uint4* shared_ptr, const uint32_t num_src_bytes) {
++    DG_STATIC_ASSERT(kNumL2PrefetchBytes == 64 or kNumL2PrefetchBytes == 256, "Invalid L2 prefetch size");
++    if constexpr (kNumL2PrefetchBytes == 64) {
++        asm volatile("cp.async.cg.shared::cta.global.L2::64B [%0], [%1], 16, %2;" ::
++            "r"(static_cast<uint32_t>(__cvta_generic_to_shared(shared_ptr))), "l"(global_ptr), "r"(num_src_bytes));
++    } else {
++        asm volatile("cp.async.cg.shared::cta.global.L2::256B [%0], [%1], 16, %2;" ::
++            "r"(static_cast<uint32_t>(__cvta_generic_to_shared(shared_ptr))), "l"(global_ptr), "r"(num_src_bytes));
++    }
++}
++
++// Copies the first `num_src_bytes` (0 or 4) bytes and zero-fills the rest of the 4-byte destination
++CUTLASS_DEVICE void cp_async_ca_zfill(const uint32_t* global_ptr, uint32_t* shared_ptr, const uint32_t num_src_bytes) {
++    asm volatile("cp.async.ca.shared::cta.global [%0], [%1], 4, %2;" ::
++        "r"(static_cast<uint32_t>(__cvta_generic_to_shared(shared_ptr))), "l"(global_ptr), "r"(num_src_bytes));
++}
++
+@@ -234,0 +272,11 @@ CUTLASS_DEVICE void st_global(float* ptr, const float& value) {
++// Store the low 16 bits of a packed pair: the `.b16` store truncates a 32-bit source register
++CUTLASS_DEVICE void st_global_low_bf16(nv_bfloat16* ptr, const nv_bfloat162& value) {
++    asm volatile("st.global.b16 [%0], %1;" :: "l"(ptr), "r"(*reinterpret_cast<const uint32_t*>(&value)));
++}
++
++CUTLASS_DEVICE uint32_t ld_global_cg(const uint32_t* ptr) {
++    uint32_t ret;
++    asm volatile("ld.global.cg.u32 %0, [%1];" : "=r"(ret) : "l"(ptr));
++    return ret;
++}
++
+@@ -323,0 +372,4 @@ CUTLASS_DEVICE void red_async_inc_rel(const uint64_t* ptr) {
++CUTLASS_DEVICE void red_add_rel(const uint64_t* ptr, const uint64_t& value) {
++    asm volatile("red.release.gpu.global.add.u64 [%0], %1;" :: "l"(ptr), "l"(value) : "memory");
++}
++
+diff --git a/deep_gemm/include/deep_gemm/scheduler/mega_mhc.cuh b/deep_gemm/include/deep_gemm/scheduler/mega_mhc.cuh
+index 8685c44..5d48a58 100644
+--- a/deep_gemm/include/deep_gemm/scheduler/mega_mhc.cuh
++++ b/deep_gemm/include/deep_gemm/scheduler/mega_mhc.cuh
+@@ -10,0 +11,31 @@ using namespace layout::mega_mhc;
++// Executions sharing a split barrier buffer are tagged by an epoch stored with the
++// barrier lines, not by %gridid: a CUDA graph kernel node keeps one grid ID across
++// replays, so a waiter could accept the previous replay's completed state and read
++// its stale split partials. Every CTA reads the same epoch after
++// cudaGridDependencySynchronize, and the last CTA to retire advances it.
++struct Epoch {
++    static CUTLASS_DEVICE uint64_t* get_epoch_ptr(uint64_t* gmem_split_barriers) {
++        return math::advance_ptr<uint64_t>(gmem_split_barriers, kSplitBarrierEpochOffset);
++    }
++
++    static CUTLASS_DEVICE uint32_t* get_exit_count_ptr(uint64_t* gmem_split_barriers) {
++        return math::advance_ptr<uint32_t>(gmem_split_barriers, kSplitBarrierExitCountOffset);
++    }
++
++    // NOTES: stable from cudaGridDependencySynchronize until every CTA retires.
++    static CUTLASS_DEVICE uint64_t get(uint64_t* gmem_split_barriers) {
++        return ptx::ld_acq_gpu(get_epoch_ptr(gmem_split_barriers));
++    }
++
++    // One thread per CTA, after the CTA's last barrier use.
++    static CUTLASS_DEVICE void retire(uint64_t* gmem_split_barriers, const uint32_t& num_ctas) {
++        const auto exit_count_ptr = get_exit_count_ptr(gmem_split_barriers);
++        if (ptx::atomic_add_rel(exit_count_ptr, 1) == num_ctas - 1) {
++            __threadfence();
++            *exit_count_ptr = 0;
++            const auto epoch_ptr = get_epoch_ptr(gmem_split_barriers);
++            ptx::st_rel(epoch_ptr, *epoch_ptr + 1);
++        }
++    }
++};
++
+@@ -12 +43 @@ using namespace layout::mega_mhc;
+-// terminal release sequence. wait_init prevents a producer from racing the grid tag.
++// terminal release sequence. wait_init prevents a producer from racing the execution tag.
+@@ -20,2 +51,16 @@ struct SplitBarrier {
+-    static CUTLASS_DEVICE uint64_t encode_state(const uint64_t grid_idx, const uint32_t num_arrived_splits = 0) {
+-        return (grid_idx + 1) * kNumSplitBarriers * kNumMaxSplits + num_arrived_splits;
++    static CUTLASS_DEVICE uint64_t get_execution_tag(uint64_t* gmem_split_barriers) {
++#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 900 && __CUDA_ARCH__ < 1000
++        // SM90 uses per-invocation state cleared before every launch/replay.
++        return ptx::get_grid_idx();
++#else
++        return Epoch::get(gmem_split_barriers);
++#endif
++    }
++
++    static CUTLASS_DEVICE uint64_t encode_state(const uint64_t epoch, const uint32_t num_arrived_splits = 0) {
++#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 900 && __CUDA_ARCH__ < 1000
++        constexpr uint32_t max_splits = kNumMaxSM90Splits;
++#else
++        constexpr uint32_t max_splits = kNumMaxSplits;
++#endif
++        return (epoch + 1) * kNumSplitBarriers * max_splits + num_arrived_splits;
+@@ -25 +70 @@ struct SplitBarrier {
+-        ptx::st_rel(get_ptr(gmem_split_barriers, m_block_idx), encode_state(ptx::get_grid_idx()));
++        ptx::st_rel(get_ptr(gmem_split_barriers, m_block_idx), encode_state(get_execution_tag(gmem_split_barriers)));
+@@ -30 +75 @@ struct SplitBarrier {
+-        const auto current_grid_barrier_base = encode_state(ptx::get_grid_idx());
++        const auto current_barrier_base = encode_state(get_execution_tag(gmem_split_barriers));
+@@ -32,2 +77,2 @@ struct SplitBarrier {
+-        // NOTES: unsigned distance rejects stale grid tags but accepts any current-grid arrival count.
+-        while (ptx::ld_acq_gpu(split_barrier_ptr) - current_grid_barrier_base >= kNumSplits);
++        // NOTES: unsigned distance rejects stale execution tags but accepts any current-execution arrival count.
++        while (ptx::ld_acq_gpu(split_barrier_ptr) - current_barrier_base >= kNumSplits);
+@@ -39,0 +85 @@ struct SplitBarrier {
++#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 1000
+@@ -40,0 +87,3 @@ struct SplitBarrier {
++#else
++        ptx::red_add_rel(state_ptr, uint64_t(1));
++#endif
+@@ -45 +94 @@ struct SplitBarrier {
+-        const auto all_splits_arrived_state = encode_state(ptx::get_grid_idx(), kNumSplits);
++        const auto all_splits_arrived_state = encode_state(get_execution_tag(gmem_split_barriers), kNumSplits);
+diff --git a/deep_gemm/include/deep_gemm/scheduler/sm90_paged_mqa_logits.cuh b/deep_gemm/include/deep_gemm/scheduler/sm90_paged_mqa_logits.cuh
+index 7e4b5d3..4ef3e31 100644
+--- a/deep_gemm/include/deep_gemm/scheduler/sm90_paged_mqa_logits.cuh
++++ b/deep_gemm/include/deep_gemm/scheduler/sm90_paged_mqa_logits.cuh
+@@ -12,3 +12 @@ void sm90_paged_mqa_logits_metadata(const uint32_t batch_size, const uint32_t ne
+-                                    const uint32_t num_next_n_atoms,
+-                                    const uint32_t* context_lens, const uint32_t* indices,
+-                                    uint32_t* schedule_metadata) {
++                                    const uint32_t* context_lens, const uint32_t* indices, uint32_t* schedule_metadata) {
+@@ -72 +69,0 @@ void sm90_paged_mqa_logits_metadata(const uint32_t batch_size, const uint32_t ne
+-    __syncwarp();
+@@ -80 +77 @@ void sm90_paged_mqa_logits_metadata(const uint32_t batch_size, const uint32_t ne
+-        // Empty SM ranges share a boundary and do not refresh context lengths.
++        // Empty SMs (when total < kNumSMs) land on atom_idx == 0, keeping `refresh_num_kv_and_advance` in-bounds.
+@@ -100,3 +97,2 @@ void sm90_paged_mqa_logits_metadata(const uint32_t batch_size, const uint32_t ne
+-        // num_next_n_atoms is host-passed (NV PR #314): SM90 clusters want 1 while
+-        // SM120 next_n=4 wants 2; computing it inline (next_n / 2) over-schedules by
+-        // 2x on SM90 and triggers IMA when the scheduler steps past context_lens.
++        const uint32_t next_n_atom = (next_n >= 2) ? 2 : 1;
++        const uint32_t num_next_n_atoms = math::ceil_div(next_n, next_n_atom);
+@@ -104,10 +99,0 @@ void sm90_paged_mqa_logits_metadata(const uint32_t batch_size, const uint32_t ne
+-        if (total == 0) {
+-            // Emit only one-past-the-end sentinels. Besides avoiding the
+-            // prefix_sum[batch_size] OOB, this prevents a final SM from
+-            // executing a synthetic zero-KV task.
+-            for (uint32_t sm_idx = lane_idx; sm_idx <= kNumSMs; sm_idx += 32) {
+-                schedule_metadata[sm_idx * 2] = batch_size * num_next_n_atoms;
+-                schedule_metadata[sm_idx * 2 + 1] = 0;
+-            }
+-            return;
+-        }
+@@ -125,4 +111 @@ void sm90_paged_mqa_logits_metadata(const uint32_t batch_size, const uint32_t ne
+-            // lo == batch_size when every context length is zero. Clamp before
+-            // reading prefix_sum[q_idx]; the scheduler constructor separately
+-            // guards empty ranges, so these entries produce no device work.
+-            const uint32_t q_idx = min(lo, batch_size - 1);
++            const uint32_t q_idx = lo;
+@@ -164 +146,0 @@ struct SM90PagedMQALogitsScheduler : SM90IndicesStorage<kIsVarlen> {
+-    uint64_t end_key;
+@@ -226,23 +208,2 @@ struct SM90PagedMQALogitsScheduler : SM90IndicesStorage<kIsVarlen> {
+-        // Clamp once here so the per-task loop below only needs ordered comparisons:
+-        // stale or corrupted metadata (end past the batch, start past end, non-zero
+-        // sentinel KV) collapses to an empty or in-batch range, and `context_lens` /
+-        // `indices` are never dereferenced past the one-past-the-end sentinel.
+-        const uint32_t sentinel_q_atom_idx = kIsVarlen ? batch_size : batch_size * kNumNextNAtoms;
+-        if (end_q_atom_idx >= sentinel_q_atom_idx)
+-            end_q_atom_idx = sentinel_q_atom_idx, end_kv_idx = 0;
+-        if (current_q_atom_idx > end_q_atom_idx or (current_q_atom_idx == end_q_atom_idx and current_kv_idx > end_kv_idx))
+-            current_q_atom_idx = end_q_atom_idx, current_kv_idx = end_kv_idx;
+-        end_key = (static_cast<uint64_t>(end_q_atom_idx) << 32) | end_kv_idx;
+-
+-        current_advance = 1;
+-        current_num_kv = 0;
+-        last_advance = 1;
+-        if (not at_end())
+-            refresh_num_kv_and_advance(current_q_atom_idx);
+-    }
+-
+-    // Ordered (not equality) end test: a stale request that shrank or emptied can move
+-    // `current_kv_idx` past `end_kv_idx` inside the last request of this SM's range.
+-    // (q, kv) packed into one 64-bit key so the test is a single compare.
+-    CUTLASS_DEVICE bool at_end() const {
+-        return ((static_cast<uint64_t>(current_q_atom_idx) << 32) | current_kv_idx) >= end_key;
++        // NOTES: unconditional call is safe — reversed metadata allocation ensures `current_q_atom_idx` is always in-bounds.
++        refresh_num_kv_and_advance(current_q_atom_idx);
+@@ -263,12 +223,0 @@ struct SM90PagedMQALogitsScheduler : SM90IndicesStorage<kIsVarlen> {
+-        // Skip requests that have no (remaining) KV work; `at_end()` keeps every
+-        // `context_lens` read inside the batch because `end_q_atom_idx <= sentinel`.
+-        while (current_kv_idx >= current_num_kv and not at_end()) {
+-            current_kv_idx = 0;
+-            current_q_atom_idx += current_advance;
+-            if (not at_end() and should_refresh_num_kv(current_q_atom_idx))
+-                refresh_num_kv_and_advance(current_q_atom_idx);
+-        }
+-
+-        if (at_end())
+-            return false;
+-
+@@ -279,0 +229,3 @@ struct SM90PagedMQALogitsScheduler : SM90IndicesStorage<kIsVarlen> {
++        if (current_q_atom_idx == end_q_atom_idx and current_kv_idx == end_kv_idx)
++            return false;
++
+@@ -284 +236 @@ struct SM90PagedMQALogitsScheduler : SM90IndicesStorage<kIsVarlen> {
+-            if (not at_end() and should_refresh_num_kv(current_q_atom_idx))
++            if (should_refresh_num_kv(current_q_atom_idx) and exist_q_atom_idx(current_q_atom_idx)) {
+@@ -285,0 +238 @@ struct SM90PagedMQALogitsScheduler : SM90IndicesStorage<kIsVarlen> {
++            }
+@@ -288,0 +242,4 @@ struct SM90PagedMQALogitsScheduler : SM90IndicesStorage<kIsVarlen> {
++
++    CUTLASS_DEVICE bool exist_q_atom_idx(const uint32_t& q_atom_idx) const {
++        return q_atom_idx < end_q_atom_idx or (q_atom_idx == end_q_atom_idx and 0 < end_kv_idx);
++    }
+diff --git a/deep_gemm/mega/sm90_fused.py b/deep_gemm/mega/sm90_fused.py
+index c293875..a40b164 100644
+--- a/deep_gemm/mega/sm90_fused.py
++++ b/deep_gemm/mega/sm90_fused.py
+@@ -97 +97,2 @@ def fp8_mxfp4_mega_moe(y: torch.Tensor,
+-                       split_k: bool = False):
++                       split_k: bool = False,
++                       pdl: Optional[bool] = False):
+@@ -99,0 +101,4 @@ def fp8_mxfp4_mega_moe(y: torch.Tensor,
++    ``pdl`` is per-call: False retains the isolated SM90 MXFP4 donor policy
++    even when dense GEMMs enable global PDL. Small calls still force PDL.
++    None explicitly inherits the global setting.
++
+@@ -138 +143 @@ def fp8_mxfp4_mega_moe(y: torch.Tensor,
+-        bool(split_k)
++        bool(split_k), pdl
+diff --git a/setup.py b/setup.py
+index 7b6deb1..75fe420 100644
+--- a/setup.py
++++ b/setup.py
+@@ -27,0 +28 @@ cxx_flags = ['-std=c++20', '-O3', '-fPIC', '-Wno-psabi', '-Wno-deprecated-declar
++             '-fvisibility=hidden', '-fvisibility-inlines-hidden', '-fno-gnu-unique',
+@@ -130,0 +132 @@ class CustomBuildPy(build_py):
++        shutil.copy2(os.path.join(current_dir, 'H20_PROVENANCE.json'), package_dir)
+@@ -206 +208 @@ if __name__ == '__main__':
+-        name='deep_gemm',
++        name='deep-gemm-h20',

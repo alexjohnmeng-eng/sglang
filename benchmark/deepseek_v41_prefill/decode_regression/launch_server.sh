@@ -4,6 +4,11 @@ ulimit -c 0
 export PATH=/opt/sglang/bin:$PATH
 export SGLANG_ENCODER_IMAGE_PROCESSOR_USE_GPU=1
 export PYTHONPATH=/repro/deps:/repro/source/python
+if [[ "${SGLANG_OPT_DSV41_UNIFIED_DEEPGEMM:-0}" == 1 ]]; then
+  export PYTHONPATH="/repro/unified_deepgemm:$PYTHONPATH"
+  export SGLANG_DG_CACHE_DIR=/repro/cache/deepgemm-h20-unified
+  export DG_JIT_CACHE_DIR="$SGLANG_DG_CACHE_DIR"
+fi
 export SGLANG_CACHE_DIR=/repro/cache
 export SGLANG_OPT_DSV41_SM90=1
 export SGLANG_OPT_DSV41_SM90_LOSSY=fp8_lm_head_target
@@ -15,17 +20,26 @@ export SGLANG_EMBEDDING_POOL_SIZE_MB=0
 export SGLANG_JIT_DEEPGEMM_FAST_WARMUP=1
 export SGLANG_UNIFIED_RADIX_TREE_CORE_BACKEND=python
 export SGLANG_RAGGED_VERIFY_MODE=static
+# Keep CP-only prefill optimizations out of both decode and non-PD GSM8K.
+export SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=0
+export SGLANG_OPT_DSV41_CP8_EP8_PREFILL=0
+export SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN=0
+export SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM=0
+export SGLANG_OPT_DSV41_SM90_MEGAMOE_16K_PREFILL=0
+export SGLANG_OPT_DSV41_MEGA_MHC_PREFILL=0
+export SGLANG_EXPERIMENT_DSV41_W2_PAIR_LAYERS=0
+export SGLANG_SHARED_EXPERT_TP1=0
+export DG_DSV41_DENSE_MULTICAST=0
 if [[ "${DECODE_MODE:-decode}" == accuracy ]]; then
   unset SGLANG_SIMULATE_ACC_LEN SGLANG_SIMULATE_ACC_GREEDY SGLANG_DSPARK_SIMULATE_FOLD
   role_args=(--disable-radix-cache)
 else
   export SGLANG_SIMULATE_ACC_LEN=4.5
-  role_args=(--disaggregation-mode decode)
+  role_args=(--disaggregation-mode decode --disaggregation-transfer-backend mooncake --disable-radix-cache)
 fi
 export HF_HUB_OFFLINE=1
 export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF=
-python3 /repro/tools/manifest.py runtime /repro/results
 parallel_args=(--tp-size 8 --dp-size 8 --enable-dp-attention --enable-dp-lm-head)
 if [[ "${DECODE_IMPLEMENTATION:-ant}" == local ]]; then
   parallel_args=(--tp-size 8 --dp-size 1 --attn-dp-size 8 --enable-dp-lm-head)
@@ -41,6 +55,12 @@ command=(python3 -m sglang.launch_server
   --chunked-prefill-size 16384 --tokenizer-worker-num 8 --load-balance-method total_tokens
   "${role_args[@]}" --language-only --watchdog-timeout 1800
   --enable-cache-report --reasoning-parser auto --tool-call-parser auto)
+if [[ "${H20_PRINT_LAUNCH:-0}" == 1 ]]; then
+  printf '%q ' "${command[@]}"
+  printf '\n'
+  exit 0
+fi
+python3 /repro/tools/manifest.py runtime /repro/results
 printf '%q ' "${command[@]}" > /repro/results/launch_command.txt
 printf '\n' >> /repro/results/launch_command.txt
 exec "${command[@]}"

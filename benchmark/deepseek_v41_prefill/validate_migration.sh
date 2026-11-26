@@ -7,6 +7,11 @@ repo=$(git -C "$tools" rev-parse --show-toplevel)
 output=${1:?Usage: validate_migration.sh NEW_OUTPUT_ROOT [REVISION_OR_TREE]}
 revision=$(git -C "$repo" rev-parse --verify "${2:-HEAD}^{tree}")
 runtime=${PREFILL_RUNTIME_DIR:-/data1/fjmeng2/dsv41-runtime}
+if [[ -n "${PREFILL_UNIFIED_DEEPGEMM_SITE:-}" ]]; then
+  exec bash "$tools/dependencies/unified/validate.sh" \
+    "$PREFILL_UNIFIED_DEEPGEMM_SITE" "$output" "$revision"
+fi
+# Legacy dependency sites below are retained for historical comparisons only.
 mhc=${PREFILL_DEEPGEMM521_SITE:-$runtime/repro/prefill-110k-local-20261125/mega-mhc-521/site}
 mkdir -- "$output"
 output=$(realpath "$output")

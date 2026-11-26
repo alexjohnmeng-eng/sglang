@@ -1,5 +1,9 @@
 # DeepSeek-V4.1-Flash prefill 完整复现
 
+当前统一 DeepGEMM 的 CP8EP8、CP8EP1、DP8EP8 三套完整测试入口见
+[H20_TESTING.md](H20_TESTING.md) 和 [run_h20.sh](run_h20.sh)。三套均关闭
+WQB→RoPE→FP8 融合；本轮按要求没有重测，以下历史成绩不能代表关闭后的配置。
+
 本目录复现 8 × H20 上的 DeepSeek-V4.1 prefill。默认使用 Ant 对齐配置，包含
 TP8 / prefill CP8 interleave / **EP1**、Engram host `per_rank`、Humming 0.1.12、
 DSPARK block size 5 和 bounded replay。启动参数见 [launch_server.sh](launch_server.sh)。
@@ -153,6 +157,8 @@ bash "$results/run_deepgemm473_serving.sh"
 
 ## SM90 wq_b 与 RoPE/Q8 融合
 
+以下为历史实验说明；当前测试脚本显式设为 0，不再接受宿主机开关重新启用。
+
 在 CP8 和 Q8 sparse prefill 下，对 8192、16384、32768 个 CP-local 行可通过
 SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=1 将 wq_b block32
 DeepGEMM、BF16 舍入、局部 64 维 RoPE 和 FP8 Q staging 合并。该开关需要
@@ -202,7 +208,7 @@ CP rank、无 gather index、各 rank 行数相等的请求才会启用该路径
 复用 16384 行工作区并调用两次。镜像、扩展与专家 placement 随运行清单记录。
 
 在宿主机从本分支仓库根目录执行。脚本会在同一容器中完成两档严格吞吐、八卡 GPU-only
-profile、全量 GSM8K 和长提示探针。可通过 `PREFILL_REVISION` 固定源码提交，
+profile、全量 GSM8K。历史长提示探针保留在原实验目录，不属于当前脚本。可通过 `PREFILL_REVISION` 固定源码提交，
 通过 `PREFILL_OUTPUT` 指定独立的结果目录。
 
 ```bash
@@ -467,3 +473,7 @@ bash benchmark/deepseek_v41_prefill/validate_migration.sh \
 ```
 
 历史提交到当前配置的映射见 [MIGRATION.md](MIGRATION.md)。
+
+### Single-source H20 DeepGEMM
+
+The consolidated build is documented in [dependencies/unified/README.md](dependencies/unified/README.md). It builds dense, SM90 MXFP4 MegaMoE and SM90 Mega mHC into one `deep_gemm._C`, selected through `PREFILL_UNIFIED_DEEPGEMM_SITE`. The complete deployment recipes are in [H20_TESTING.md](H20_TESTING.md). They disable WQB/RoPE/FP8 fusion and reject legacy DeepGEMM/FlashInfer overlays. This integration has no new performance claim; the user requested no benchmark or GSM8K rerun for the script update. Historical measurements remain in `dependencies/unified/VALIDATION.md` and `OPTIMIZATION_PLAN.md`.
