@@ -710,3 +710,99 @@ adds the dense extension and `PREFILL_Q8_TMA_SWA=1` enables the contiguous SWA
 TMA path. The historical source/runtime artifacts and GSM8K result are under
 `/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/q8-swa-tma/serving-combined/`.
 Any future product commit must run the full GSM8K test before the next commit.
+
+## 2026-11-26 Final historical prefill isolation and decode regression
+
+The local `experiment/dsv41-h20-99k-final-isolation` candidate adds an explicit
+CP8/EP8 gate around the historical rank-major KV/C2/WQB/SWA paths, restores
+EP1 paired-W2 assembly/shared-add placement to `82bebb1d34`, packages all
+three pinned DeepGEMM dependency patches and adds a full decode regression
+entrypoint. Feature provenance and reproduction are in
+[the migration manifest](benchmark/deepseek_v41_prefill/MIGRATION.md).
+
+The final runtime source is frozen at tree
+`9c340c0ff6f96dc36282d3f6130e6fc4304b7847` for the current validations.
+After this snapshot, three runtime files received only formatting/import sorting.
+Their computation is unchanged: two have identical ASTs; the third differs only
+in top-level import order with the same imported bindings. The equivalence
+report is `h20-final-isolation-validation/final-runtime-equivalence.json`.
+Reproduction/analysis scripts, documentation and executable modes were completed
+separately; final imports and isolation tests were checked in the image.
+
+| Configuration | Full GSM8K | Request errors | Performance status |
+| --- | ---: | ---: | --- |
+| DP8/EP8, real prefill, unified, DSPARK, Humming FP8 | **1281/1319 (97.1190%)** | **0** | Fake-prefill 10025.33 -> 10044.87 tok/s (+0.19%); 8-rank profiles complete |
+| CP8/EP8, historical 16K MegaMoE pool, image FI0.7.2 | **1281/1319 (97.1190%)** | **0** | **99782.30 / 97472.97 tok/s**, 64K/256K; 16 traces complete |
+| CP8/EP1, paired-W2/mHC, baseline implementation | **1282/1319 (97.1948%)** | **0** | **92917.65 / 89424.05 tok/s**, 64K/256K; 16 traces complete |
+
+DP8/EP8 used the image's Python3.12.16 and FlashInfer0.7.2, TP8,
+`dp_size=1, attn_dp_size=8, ep_size=8`, Engram host per_rank,
+`SGLANG_HUMMING_INPUT_QUANT_CONFIG='{"dtype":"float8e4m3"}'`, DSPARK block5,
+max_running256/graph32, radix cache disabled, 4-shot/temperature0,
+max_tokens2048/concurrency64 and all 1319 GSM8K test questions. Acceptance
+simulation was absent. Its prompt/target SHA256 is
+`198244a8f633a7d172fb6ff4baab98ee48559a94d105d3a257b6775815970250`.
+Full report, reviews, runtime/source manifests and resolved server parameters:
+`/data1/fjmeng2/dsv41-runtime/repro/h20-final-dp8ep8-validated-v2/accuracy/`.
+
+An initial actual-32K-pool prefill probe failed the early-combine bitmap
+compile limit. The tested #473 binary has no early-combine-disable override.
+Auditing the successful historical `megamoe-32k` source and eight-rank GPU
+traces confirmed it used a 16K pool, splitting 32K local rows into two calls;
+its 99922.39/97555.53 tok/s remains a valid historical measurement but is not
+proof of a 32K pool. The failed capacity option is excluded from this candidate.
+The initial decode validation driver also stopped before scoring on a flat
+server-info response; its parser now supports flat and nested responses.
+Both failed/unscored attempts and the final successful accuracy run are retained.
+
+Current-source isolation/router checks passed **4 tests and 9 subtests**;
+the broader preflight previously passed **6 tests and 58 subtests**. Dependency
+source hashes and historical MegaMoE binary hash matched the checked-in
+manifest; all three dependency patches passed reverse-apply checks against
+the tested source, and Python lint/format plus shell syntax checks passed.
+All three full GSM8K gates, both prefill performance/profile gates and the matched
+decode non-regression gate are complete. Integration is local; no remote push.
+
+The final CP8/EP8 run completed at 656.790 ms / 2689.402 ms median TTFT
+for exact 64K/256K inputs (10 warmups, 5 samples, one output, cache disabled).
+Throughput is within 0.15% of the historical maximum. Same-server GSM8K
+scored 1281/1319 with zero errors and the same prompt/target hash as DP8.
+Its runtime manifest confirms image FlashInfer0.7.2 and the isolated dense,
+#473 MegaMoE and #521 mHC modules. Full artifacts are under
+`repro/h20-final-cp8ep8-image-fi072/`.
+
+All eight ranks were compared against the historical `megamoe-32k` traces.
+At 64K, mean GPU span was 644.723 vs 644.316 ms, MegaMoE kernel sum per
+rank 266.320 vs 266.154 ms, and calls 40 vs 40. At 256K, span was 2646.951
+vs 2645.448 ms, MegaMoE 1037.018 vs 1037.297 ms, calls 60 vs 60. Barrier
+sums were 2.472/10.214 ms vs historical 2.290/8.942 ms. These are overlapping
+GPU-event sums, not isolated transport latency; unprofiled TTFT remains the
+performance gate. Results: `historical-profile-comparison/` under that run.
+
+Decode profiles also match 29 verify rounds on every rank. W13/W2 calls
+are 1247/1247 per rank for both versions, with no introduced CP MegaMoE or
+paired-W2 kernels. Fake-prefill timings have 64 successful requests per sample,
+eight per DP rank and identical exact-input hashes. This establishes decode
+non-regression; the +0.19% is not claimed as a new decode optimization.
+
+The SGLang `llm-torch-profiler-analysis` skill generated single-trace triage
+reports `skill-triage-{65536,262144}.txt` in the CP8/EP8 run. GPU-only traces
+support timing comparisons; CPU/source attribution and overlap are unresolved.
+Generic fuse suggestions are not proof of additional DSV4.1 opportunities.
+The all-rank comparisons above remain the basis for alignment conclusions.
+
+One-shot reproduction of all three configurations:
+
+```bash
+bash benchmark/deepseek_v41_prefill/validate_migration.sh \
+  /data1/fjmeng2/dsv41-runtime/repro/new-migration-validation HEAD
+```
+
+EP1 final regression completed **1282/1319 (97.1948%)**, zero errors,
+**92917.65 / 89424.05 tok/s** at 64K/256K, with sixteen GPU-only traces.
+It retains paired-W2/mHC, image FlashInfer0.7.2, stock dense GEMM, and no EP8
+prefill opt-in. Artifacts: `repro/h20-final-ep1-regression/`.
+Compared with this EP1 configuration, the EP8 recipe is +7.39% / +9.00%; these
+are deployment-configuration gains, not isolated attribution to one kernel.
+The complete verified result manifest is
+`repro/h20-final-isolation-validation/validation_summary.json`.

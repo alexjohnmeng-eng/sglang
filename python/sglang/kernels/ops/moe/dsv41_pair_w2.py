@@ -9,28 +9,59 @@ from sglang.kernels.ops.activation.silu_mul_fp8_row_quant import _swiglu
 
 @triton.jit
 def _store_gated_and_peak(
-    gate_up, out, peaks, routes, WIDTH: tl.constexpr, LIMIT: tl.constexpr,
-    ROWS: tl.constexpr, SPLIT: tl.constexpr,
+    gate_up,
+    out,
+    peaks,
+    routes,
+    WIDTH: tl.constexpr,
+    LIMIT: tl.constexpr,
+    ROWS: tl.constexpr,
+    SPLIT: tl.constexpr,
 ):
     row = tl.program_id(0).to(tl.int64) * ROWS + tl.arange(0, ROWS)
     a, cols_a, mask_a = _swiglu(
-        gate_up, row, row < routes, 2 * WIDTH, 0, WIDTH, SPLIT, LIMIT,
+        gate_up,
+        row,
+        row < routes,
+        2 * WIDTH,
+        0,
+        WIDTH,
+        SPLIT,
+        LIMIT,
     )
     tl.store(out + row[:, None] * WIDTH + cols_a[None, :], a.to(tl.bfloat16), mask_a)
     peak = tl.max(tl.abs(a), 1)
     if SPLIT < WIDTH:
         b, cols_b, mask_b = _swiglu(
-            gate_up, row, row < routes, 2 * WIDTH, SPLIT, WIDTH, 32, LIMIT,
+            gate_up,
+            row,
+            row < routes,
+            2 * WIDTH,
+            SPLIT,
+            WIDTH,
+            32,
+            LIMIT,
         )
-        tl.store(out + row[:, None] * WIDTH + cols_b[None, :], b.to(tl.bfloat16), mask_b)
+        tl.store(
+            out + row[:, None] * WIDTH + cols_b[None, :], b.to(tl.bfloat16), mask_b
+        )
         peak = tl.maximum(peak, tl.max(tl.abs(b), 1))
     tl.store(peaks + row, peak, row < routes)
 
 
 @triton.jit
 def _quantize_and_push_pair(
-    src, left_peak, right_peak, local_dst, remote_dst, scale_dst, routes,
-    WIDTH: tl.constexpr, COLOR: tl.constexpr, ROWS: tl.constexpr, SPLIT: tl.constexpr,
+    src,
+    left_peak,
+    right_peak,
+    local_dst,
+    remote_dst,
+    scale_dst,
+    routes,
+    WIDTH: tl.constexpr,
+    COLOR: tl.constexpr,
+    ROWS: tl.constexpr,
+    SPLIT: tl.constexpr,
 ):
     row = tl.program_id(0).to(tl.int64) * ROWS + tl.arange(0, ROWS)
     peak_l = tl.load(left_peak + row, row < routes, 0)
@@ -48,17 +79,16 @@ def _quantize_and_push_pair(
     tl.store(remote_dst + dst + col[None, :], code, mask)
     if SPLIT < WIDTH:
         tail = SPLIT + tl.arange(0, 32)
-        value = tl.load(src_row + tail[None, :], row[:, None] < routes, 0).to(tl.float32)
+        value = tl.load(src_row + tail[None, :], row[:, None] < routes, 0).to(
+            tl.float32
+        )
         code = (value * inverse[:, None]).to(tl.float8e4nv)
         tl.store(local_dst + dst + tail[None, :], code, row[:, None] < routes)
         tl.store(remote_dst + dst + tail[None, :], code, row[:, None] < routes)
 
 
 @triton.jit
-def _sum_colored_slots(
-    src, out, shared, rows, HALF: tl.constexpr, BLOCK: tl.constexpr,
-    ADD_SHARED: tl.constexpr,
-):
+def _sum_colored_slots(src, out, rows, HALF: tl.constexpr, BLOCK: tl.constexpr):
     offset = tl.program_id(0).to(tl.int64) * BLOCK + tl.arange(0, BLOCK)
     row = offset // (HALF * 2)
     col = offset % (HALF * 2)
@@ -67,21 +97,13 @@ def _sum_colored_slots(
     accum = tl.load(addr, row < rows, 0).to(tl.float32)
     for pair in tl.static_range(1, 4):
         accum += tl.load(addr + pair * 2 * rows * HALF, row < rows, 0).to(tl.float32)
-    value = accum.to(tl.bfloat16)
-    if ADD_SHARED:
-        # Preserve the BF16 rounding between the routed sum and shared add.
-        local = tl.load(shared + offset, row < rows, 0)
-        value = (value.to(tl.float32) + local.to(tl.float32)).to(tl.bfloat16)
-    tl.store(out + offset, value, row < rows)
+    tl.store(out + offset, accum.to(tl.bfloat16), row < rows)
 
 
-def sum_colored_slots(slots, rows, width, *, shared=None):
+def sum_colored_slots(slots, rows, width):
     out = torch.empty((rows, width), dtype=slots.dtype, device=slots.device)
-    if shared is not None:
-        assert shared.shape == out.shape and shared.is_contiguous()
-        assert shared.dtype == out.dtype == torch.bfloat16
     _sum_colored_slots[(triton.cdiv(rows * width, 2048),)](
-        slots, out, shared, rows, width // 2, 2048, shared is not None, num_warps=4
+        slots, out, rows, width // 2, 2048, num_warps=4
     )
     return out
 
@@ -97,6 +119,16 @@ def store_gated_and_peak(gate_up, gated, peaks, swiglu_limit):
 def quantize_and_push_pair(gated, left_peak, right_peak, local, remote, scale, color):
     routes, width = gated.shape
     _quantize_and_push_pair[(triton.cdiv(routes, 8),)](
-        gated, left_peak, right_peak, local, remote, scale, routes,
-        width, color, 8, 256, num_warps=4,
+        gated,
+        left_peak,
+        right_peak,
+        local,
+        remote,
+        scale,
+        routes,
+        width,
+        color,
+        8,
+        256,
+        num_warps=4,
     )

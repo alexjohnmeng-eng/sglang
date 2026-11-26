@@ -46,8 +46,8 @@ def runtime_manifest():
         "triton": "3.8.0",
         "tilelang": "0.1.12",
     }
-    if os.environ.get("SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM") == "1":
-        # The historical EP8 MegaMoE site was validated with FlashInfer 0.7.5;
+    if Path("/repro/flashinfer/flashinfer").is_dir():
+        # Optional historical EP8 MegaMoE site was validated with FlashInfer 0.7.5;
         # the EP1 h20 path intentionally remains on the image's 0.7.2 ABI.
         expected["flashinfer-python"] = "0.7.5.post1"
     versions = {k: importlib.metadata.version(k) for k in expected}
@@ -61,7 +61,9 @@ def runtime_manifest():
         "environment": {
             k: v
             for k, v in os.environ.items()
-            if k.startswith(("SGLANG_", "PYTORCH_", "CUDA_", "NCCL_"))
+            if k.startswith(
+                ("SGLANG_", "PYTORCH_", "CUDA_", "NCCL_", "DG_", "DG473_", "DG521_")
+            )
             and not any(word in k for word in ("KEY", "TOKEN", "SECRET"))
         },
         "pythonpath": os.environ["PYTHONPATH"],

@@ -3884,6 +3884,8 @@ class DeepseekV4AttnBackend(
         num_local = sum(q_lens_cpu)
         assert cp_projected is None or (run_compressor and layer.compressor is not None)
         if cp_projected is not None:
+            from sglang.srt.models.deepseek_v4_cp_prefill import cp8_ep8_prefill_enabled
+
             self._low_ratio_compress_torch(
                 layer,
                 None,
@@ -3891,7 +3893,8 @@ class DeepseekV4AttnBackend(
                 pos_global,
                 projected=cp_projected,
                 prefill_pool=(
-                    self.cp_compressor_projects_local_rows
+                    cp8_ep8_prefill_enabled()
+                    and self.cp_compressor_projects_local_rows
                     and tail is None
                     and q_lens_cpu in ([8192], [16384], [32768])
                     and total == 8 * q_lens_cpu[0]

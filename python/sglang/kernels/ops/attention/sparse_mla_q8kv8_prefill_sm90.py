@@ -6,7 +6,6 @@ with FP8 quantized Q and KV tensors.
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING, Optional
 
 import torch
@@ -18,6 +17,7 @@ from sglang.kernels.ops.attention.dsv4.dequant_k_cache import (
     DIM_ROPE,
     fp8_dtype,
 )
+from sglang.srt.environ import envs
 from sglang.srt.utils.custom_op import register_custom_op
 
 if TYPE_CHECKING:
@@ -194,7 +194,8 @@ def _sparse_mla_q8kv8_prefill_full_op(
         s_q >= 8192
         and h_q == 64
         and d_qk == 512
-        and os.environ.get("SGLANG_EXPERIMENT_DSV41_Q8_TMA_SWA") == "1"
+        and envs.SGLANG_OPT_DSV41_CP8_EP8_PREFILL.get()
+        and envs.SGLANG_EXPERIMENT_DSV41_Q8_TMA_SWA.get()
     )
     _, dispatch_full_fn, _ = _get_entries(use_tma_swa)
     dispatch_full_fn(

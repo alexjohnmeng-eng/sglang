@@ -1,0 +1,431 @@
+--- a/csrc/apis/einsum.hpp
++++ b/csrc/apis/einsum.hpp
+@@ -253,8 +253,8 @@
+         sm100_fp8_bmm(a, transformed_sfa, b, transformed_sfb, c, d_tensor, batch_size, m, n, k, gran_k_a, gran_k_b, major_a, major_b, compiled_dims, sfd);
+     } else {
+         const auto major_sfb = get_major_type_ab(sfb);
+-        DG_HOST_ASSERT(gran_k_a == 128 and gran_k_b == 128);
+-        sm90_fp8_bmm(a, transformed_sfa, b, transformed_sfb, c, d_tensor, batch_size, m, n, k, major_a, major_b, major_sfb, compiled_dims);
++        DG_HOST_ASSERT(gran_k_a == gran_k_b and (gran_k_a == 128 or gran_k_a == 32));
++        sm90_fp8_bmm(a, transformed_sfa, b, transformed_sfb, c, d_tensor, batch_size, m, n, k, major_a, major_b, major_sfb, compiled_dims, gran_k_a);
+     }
+ }
+
+--- a/csrc/jit_kernels/heuristics/sm90.hpp
++++ b/csrc/jit_kernels/heuristics/sm90.hpp
+@@ -25,6 +25,13 @@
+         const int max_block_m = desc.k <= short_k ? 2 * block_k : block_k;
+         const bool allow_small_m = not block32 or desc.k <= 2 * short_k;
+
++        const bool tuned_projection = (desc.n == 32768 && desc.k == 1280) ||
++                                      (desc.n == 4608 && desc.k == 5120);
++        const int forced_tile_m = block32 && desc.m == 8192 && tuned_projection &&
++                desc.num_sms == 78 && desc.gemm_type == GemmType::Normal &&
++                desc.cd_dtype == torch::kBFloat16
++            ? 256 : 0;
++
+         // Block M candidates
+         std::vector<int> block_m_candidates;
+         if (desc.gemm_type == GemmType::Normal or
+@@ -67,17 +74,29 @@
+         for (int i = start; i <= end; i += step)
+             block_n_candidates.push_back(i);
+
++        const bool serving_wo_b = desc.compiled_dims.empty() && desc.n == 5120 && desc.k == 8192;
++        const bool serving_wq_b = desc.compiled_dims.empty() && desc.n == 32768 && desc.k == 1280;
++        const int multicast_override = block32 && desc.gemm_type == GemmType::Normal &&
++            desc.num_sms == 78 && (desc.m == 8192 || desc.m == 32768) ?
++            (serving_wo_b ? 2 : (serving_wq_b && desc.m == 32768 ? 1 : 0)) : 0;
++        DG_HOST_ASSERT(multicast_override >= 0 && multicast_override <= 2);
++
+         // Disable multicast for performance
+         const bool disable_multicast =
+             // The number of k-groups is large (a heuristic)
+             (desc.gemm_type == GemmType::KGroupedContiguous and desc.num_groups > 4) or
+             // Not supported
+-            (desc.gemm_type == GemmType::Batched) or block32;
++            (desc.gemm_type == GemmType::Batched) or (block32 && multicast_override == 0);
+
+         // Enumerate all candidates
+         std::vector<Layout> candidates;
+         for (int cluster_m = 1; cluster_m <= (disable_multicast ? 1 : 2); ++ cluster_m) {
+             for (int cluster_n = 1; cluster_n <= (disable_multicast ? 1 : 2); ++ cluster_n) {
++                if (multicast_override &&
++                    (cluster_m != (multicast_override == 1 ? 2 : 1) ||
++                     cluster_n != (multicast_override == 2 ? 2 : 1)))
++                    continue;
++
+                 // We only support cluster 2
+                 if (cluster_m * cluster_n > 2)
+                     continue;
+@@ -90,7 +109,7 @@
+                     for (int block_n: block_n_candidates) {
+                         // Long K favors overlapping wide single-wave tiles; short K can
+                         // amortize B loads across two M waves without spilling.
+-                        if (block32 and block_m > max_block_m)
++                        if (block32 && block_m > max_block_m && block_m != forced_tile_m)
+                             continue;
+                         // 1D2D kernel unroll requirement
+                         if (desc.kernel_type == KernelType::Kernel1D2D and block_n > block_k and (block_n % (block_n - block_k) != 0 and block_k % (block_n - block_k) != 0))
+@@ -125,6 +144,12 @@
+             }
+         }
+
++        if (forced_tile_m != 0 && std::any_of(candidates.begin(), candidates.end(),
++                [&](const Layout& layout) { return layout.block_m == forced_tile_m; })) {
++            std::erase_if(candidates, [&](const Layout& layout) {
++                return layout.block_m != forced_tile_m;
++            });
++        }
+         DG_HOST_ASSERT(not candidates.empty());
+         return candidates;
+     }
+--- a/csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp
++++ b/csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp
+@@ -28,6 +28,8 @@
+         CUtensorMap tensor_map_d;
+         CUtensorMap tensor_map_sfa;
+         int sf_granularity = 128;
++        const void* q_positions = nullptr;
++        const void* q_freqs = nullptr;
+     };
+
+     static void compile_and_launch(const std::string& tag, const Args& args) {
+@@ -57,7 +59,7 @@
+         {}, {},
+         {}, {},
+         {},
+-        {}, {}
++        {}, {}, {}
+     >);
+ }};
+ )",
+@@ -73,7 +75,7 @@
+         args.gemm_config.layout.get_cluster_size(), args.gemm_config.layout.cluster_n > 1,
+         args.gemm_config.launch_config.num_sms, to_string(args.gemm_desc.gemm_type),
+         to_string(args.gemm_desc.cd_dtype),
+-        get_default_epilogue_type(args.epilogue_type), args.sf_granularity));
++        get_default_epilogue_type(args.epilogue_type), args.sf_granularity, args.q_freqs ? "true" : "false"));
+
+         // Launch
+         jit->launch(
+@@ -81,7 +83,7 @@
+             args.sfb, args.grouped_layout,
+             args.gemm_desc.m, args.gemm_desc.n, args.gemm_desc.k,
+             args.tensor_map_a, args.tensor_map_b,
+-            args.tensor_map_d, args.tensor_map_sfa
++            args.tensor_map_d, args.tensor_map_sfa, args.q_positions, args.q_freqs
+         );
+     }
+ };
+@@ -94,8 +96,12 @@
+                                const cute::UMMA::Major& major_a, const cute::UMMA::Major& major_b, const cute::UMMA::Major& major_sfb,
+                                const std::string& compiled_dims,
+                                const std::optional<std::string>& epilogue_type = std::nullopt,
+-                               const int sf_granularity = 128) {
+-    DG_HOST_ASSERT(not c.has_value() and d.scalar_type() == torch::kBFloat16);
++                               const int sf_granularity = 128,
++                               const torch::Tensor* q_positions = nullptr,
++                               const torch::Tensor* q_freqs = nullptr) {
++    const bool q8_rope = q_freqs != nullptr;
++    DG_HOST_ASSERT(not c.has_value());
++    DG_HOST_ASSERT(d.scalar_type() == (q8_rope ? torch::kFloat8_e4m3fn : torch::kBFloat16));
+     DG_HOST_ASSERT(sf_granularity == 128 or sf_granularity == 32);
+     DG_HOST_ASSERT(sf_granularity != 32 or (n % 8 == 0 and k % 32 == 0));
+     DG_HOST_ASSERT(major_a == cute::UMMA::Major::K and major_b == cute::UMMA::Major::K);
+@@ -105,7 +111,7 @@
+         .kernel_type = KernelType::Kernel1D2D,
+         .m = m, .n = n, .k = k, .num_groups = 1,
+         .a_dtype = a.scalar_type(), .b_dtype = b.scalar_type(),
+-        .cd_dtype = d.scalar_type(),
++        .cd_dtype = q8_rope ? torch::kBFloat16 : d.scalar_type(),
+         .major_a = major_a, .major_b = major_b,
+         .with_accumulation = c.has_value(),
+         .num_sms = runtime->get_num_sms(),
+@@ -128,9 +134,13 @@
+                                               config.layout.block_k,
+                                               static_cast<int>(b.stride(get_non_contiguous_dim(major_b))), 1,
+                                               config.storage_config.swizzle_b_mode);
++    if (q8_rope) {
++        DG_HOST_ASSERT(config.layout.block_n == 128 and config.storage_config.swizzle_cd_mode == 128);
++        DG_HOST_ASSERT(m % config.layout.block_m == 0);
++    }
+     const auto tensor_map_d = make_tma_cd_desc(d, m, static_cast<int>(d.size(-1)),
+                                                config.storage_config.store_block_m,
+-                                               config.storage_config.store_block_n,
++                                               q8_rope ? config.layout.block_n : config.storage_config.store_block_n,
+                                                static_cast<int>(d.stride(-2)), 1,
+                                                config.storage_config.swizzle_cd_mode);
+     const auto tensor_map_sfa = make_tma_sf_desc(cute::UMMA::Major::MN, sfa, m, k,
+@@ -155,6 +165,8 @@
+         .tensor_map_d = tensor_map_d,
+         .tensor_map_sfa = tensor_map_sfa,
+         .sf_granularity = sf_granularity,
++        .q_positions = q8_rope ? q_positions->data_ptr() : nullptr,
++        .q_freqs = q8_rope ? q_freqs->data_ptr() : nullptr,
+     });
+ }
+
+@@ -310,9 +322,16 @@
+                          const torch::Tensor& d,
+                          const int& batch_size, const int& m, const int& n, const int& k,
+                          const cute::UMMA::Major& major_a, const cute::UMMA::Major& major_b, const cute::UMMA::Major& major_sfb,
+-                         const std::string& compiled_dims) {
++                         const std::string& compiled_dims,
++                         const int sf_granularity = 128) {
+     DG_HOST_ASSERT(d.scalar_type() == torch::kBFloat16);
+     DG_HOST_ASSERT(major_a == cute::UMMA::Major::K and major_b == cute::UMMA::Major::K);
++    const bool block32 = sf_granularity == 32;
++    if (block32) {
++        DG_HOST_ASSERT(not c.has_value() and n % 32 == 0 and k % 128 == 0);
++        DG_HOST_ASSERT(a.stride(0) == k and a.stride(1) == batch_size * k);
++        DG_HOST_ASSERT(d.stride(0) == n and d.stride(1) == batch_size * n);
++    }
+
+     const auto desc = GemmDesc {
+         .gemm_type = GemmType::Batched,
+@@ -324,7 +343,8 @@
+         .with_accumulation = c.has_value(),
+         .num_sms = runtime->get_num_sms(),
+         .tc_util = runtime->get_tc_util(),
+-        .compiled_dims = compiled_dims
++        .compiled_dims = compiled_dims,
++        .max_gran_k = sf_granularity
+     };
+     const auto config = get_best_config<SM90ArchSpec>(desc);
+
+@@ -332,7 +352,11 @@
+     DG_HOST_ASSERT(config.storage_config.swizzle_a_mode == config.layout.block_k);
+     DG_HOST_ASSERT(config.storage_config.swizzle_b_mode == config.layout.block_k);
+     const int load_block_m = config.storage_config.load_block_m;
+-    const auto tensor_map_a = make_tma_3d_desc(a, k, m, batch_size,
++    const auto tensor_map_a = block32
++        ? make_tma_3d_desc(a, k, batch_size, m,
++                          config.layout.block_k, 1, load_block_m,
++                          a.stride(0), a.stride(1), config.storage_config.swizzle_a_mode)
++        : make_tma_3d_desc(a, k, m, batch_size,
+                                                config.layout.block_k, load_block_m, 1,
+                                                a.stride(1),
+                                                a.stride(0),
+@@ -347,13 +371,18 @@
+
+     const int store_block_m = config.storage_config.store_block_m;
+     const int store_block_n = config.storage_config.store_block_n;
+-    const auto tensor_map_d = make_tma_3d_desc(d, n, m, batch_size,
++    const auto tensor_map_d = block32
++        ? make_tma_3d_desc(d, n, batch_size, m,
++                          store_block_n, 1, store_block_m,
++                          d.stride(0), d.stride(1), config.storage_config.swizzle_cd_mode)
++        : make_tma_3d_desc(d, n, m, batch_size,
+                                                store_block_n, store_block_m, 1,
+                                                d.stride(1), d.stride(0),
+                                                config.storage_config.swizzle_cd_mode);
+
+     const auto tensor_map_sfa = make_tma_sf_desc(cute::UMMA::Major::MN, sfa, m, k,
+-                                                 config.layout.block_m, config.layout.block_k, batch_size, 0);
++                                                 config.layout.block_m, sf_granularity, batch_size,
++                                                 0, 0, false, config.layout.block_k / sf_granularity);
+
+     // Compile and launch
+     SM90FP8Gemm1D2DRuntime::compile_and_launch("sm90_fp8_gemm_1d2d", {
+@@ -373,6 +402,7 @@
+         .tensor_map_b = tensor_map_b,
+         .tensor_map_d = tensor_map_d,
+         .tensor_map_sfa = tensor_map_sfa,
++        .sf_granularity = sf_granularity,
+     });
+ }
+
+--- a/csrc/torch_library_api.cpp
++++ b/csrc/torch_library_api.cpp
+@@ -179,6 +179,30 @@
+                compiled_dims, disable_ue8m0_cast, to_optional_float(alpha));                       \
+ }
+ DG_DEFINE_FP8_FP4_GEMM(fp8_fp4_gemm_nt)
++
++void dg_dsv41_wqb_q8_rope(const Tensor& a, const Tensor& a_sf, const Tensor& b, const Tensor& b_sf,
++                         const Tensor& d, const Tensor& positions, const Tensor& freqs) {
++    const int m = static_cast<int>(a.size(0));
++    constexpr int n = 32768, k = 1280;
++    DG_HOST_ASSERT(jit->device.get_arch_major() == 9 and m >= 8192 and m % 256 == 0);
++    DG_HOST_ASSERT(a.sizes() == at::IntArrayRef({m, k}) and b.sizes() == at::IntArrayRef({n, k}));
++    DG_HOST_ASSERT(d.sizes() == at::IntArrayRef({m, n}) and d.is_contiguous());
++    DG_HOST_ASSERT(positions.sizes() == at::IntArrayRef({m}) and positions.scalar_type() == torch::kInt64);
++    DG_HOST_ASSERT(freqs.dim() == 2 and freqs.size(1) == 64 and freqs.scalar_type() == torch::kFloat);
++    for (const auto* t : {&a, &a_sf, &b, &b_sf, &d, &positions, &freqs})
++        DG_HOST_ASSERT(t->is_cuda() and t->device() == a.device());
++    DG_HOST_ASSERT(positions.is_contiguous() and freqs.is_contiguous());
++    DG_HOST_ASSERT(a.scalar_type() == torch::kFloat8_e4m3fn and b.scalar_type() == a.scalar_type());
++    std::optional<std::tuple<int, int, int>> recipe = std::make_tuple(1, 32, 32);
++    std::optional<std::tuple<int, int>> recipe_a, recipe_b;
++    const auto [sfa, sfb, gran_k_a, gran_k_b] = layout::transform_sf_pair_into_required_layout(
++        a_sf, b_sf, m, n, k, recipe, recipe_a, recipe_b, std::nullopt, std::nullopt, false);
++    const auto major_a = get_major_type_ab(a);
++    const auto major_b = get_major_type_ab(b);
++    sm90_fp8_gemm_1d2d(a, sfa, b, sfb, std::nullopt, d, m, n, k, major_a, major_b,
++                       get_major_type_ab(sfb), "", std::nullopt, 32, &positions, &freqs);
++}
++
+ DG_DEFINE_FP8_FP4_GEMM(fp8_fp4_gemm_nn)
+ DG_DEFINE_FP8_FP4_GEMM(fp8_fp4_gemm_tn)
+ DG_DEFINE_FP8_FP4_GEMM(fp8_fp4_gemm_tt)
+@@ -706,6 +730,7 @@
+     m.def("cublaslt_gemm_tt" DG_CUBLASLT_GEMM_SCHEMA);
+     m.def("cublaslt_nvfp4_gemm_nt(Tensor a, Tensor a_sf, Tensor b, Tensor b_sf, Tensor(a!) d, Tensor? c) -> ()");
+     m.def("fp8_fp4_gemm_nt" DG_FP8_FP4_GEMM_SCHEMA);
++    m.def("dsv41_wqb_q8_rope(Tensor a, Tensor a_sf, Tensor b, Tensor b_sf, Tensor(a!) d, Tensor positions, Tensor freqs) -> ()");
+     m.def("fp8_fp4_gemm_nn" DG_FP8_FP4_GEMM_SCHEMA);
+     m.def("fp8_fp4_gemm_tn" DG_FP8_FP4_GEMM_SCHEMA);
+     m.def("fp8_fp4_gemm_tt" DG_FP8_FP4_GEMM_SCHEMA);
+@@ -824,6 +849,7 @@
+     m.impl("cublaslt_gemm_tt", &dg_cublaslt_gemm_tt);
+     m.impl("cublaslt_nvfp4_gemm_nt", &dg_cublaslt_nvfp4_gemm_nt);
+     m.impl("fp8_fp4_gemm_nt", &dg_fp8_fp4_gemm_nt);
++    m.impl("dsv41_wqb_q8_rope", &dg_dsv41_wqb_q8_rope);
+     m.impl("fp8_fp4_gemm_nn", &dg_fp8_fp4_gemm_nn);
+     m.impl("fp8_fp4_gemm_tn", &dg_fp8_fp4_gemm_tn);
+     m.impl("fp8_fp4_gemm_tt", &dg_fp8_fp4_gemm_tt);
+--- a/deep_gemm/include/deep_gemm/impls/sm90_fp8_gemm_1d2d.cuh
++++ b/deep_gemm/include/deep_gemm/impls/sm90_fp8_gemm_1d2d.cuh
+@@ -45,20 +45,22 @@
+           uint32_t kNumTMAMulticast, bool kIsTMAMulticastOnA,
+           uint32_t kNumSMs, GemmType kGemmType,
+           typename cd_dtype_t,
+-          typename epilogue_op_t, uint32_t SF_GRAN = 128>
++          typename epilogue_op_t, uint32_t SF_GRAN = 128, bool kQ8Rope = false>
+ CUTLASS_GLOBAL __launch_bounds__(kNumTMAThreads + kNumMathThreads, 1) void
+ sm90_fp8_gemm_1d2d_impl(float* sfb, int* grouped_layout,
+                         uint32_t shape_m, uint32_t shape_n, uint32_t shape_k,
+                         const __grid_constant__ cute::TmaDescriptor tensor_map_a,
+                         const __grid_constant__ cute::TmaDescriptor tensor_map_b,
+                         const __grid_constant__ cute::TmaDescriptor tensor_map_d,
+-                        const __grid_constant__ cute::TmaDescriptor tensor_map_sfa) {
++                        const __grid_constant__ cute::TmaDescriptor tensor_map_sfa,
++                        const int64_t* q_positions, const float* q_freqs) {
+ #if (defined(__CUDA_ARCH__) and (__CUDA_ARCH__ >= 900)) or defined(__CLION_IDE__)
+     // Scaling checks
+     DG_STATIC_ASSERT(BLOCK_K == 128, "TMA stages use K=128");
+     DG_STATIC_ASSERT(SF_GRAN == 32 or SF_GRAN == 128, "Unsupported scale granularity");
+-    DG_STATIC_ASSERT(SF_GRAN != 32 or (BLOCK_N % 32 == 0 and kGemmType == GemmType::Normal),
+-                     "Block32 currently supports dense GEMM with aligned N tiles");
++    DG_STATIC_ASSERT(SF_GRAN != 32 or (BLOCK_N % 32 == 0 and
++                     (kGemmType == GemmType::Normal or kGemmType == GemmType::Batched)),
++                     "Block32 supports dense and batched GEMM with aligned N tiles");
+     DG_STATIC_ASSERT(
+         math::constexpr_ceil_div(BLOCK_N, BLOCK_K) == 1 or
+         (math::constexpr_gcd(BLOCK_N, BLOCK_K) == BLOCK_N - BLOCK_K), "Too much B scales in a single block");
+@@ -71,6 +73,7 @@
+     using Barrier = cutlass::arch::ClusterTransactionBarrier;
+     DG_STATIC_ASSERT(BLOCK_M % WGMMA::M == 0 or BLOCK_M < WGMMA::M, "Invalid block size");
+     constexpr bool kIsBlock32 = SF_GRAN == 32;
++    constexpr bool kTokenMajorBatched = kIsBlock32 and kGemmType == GemmType::Batched;
+     constexpr uint32_t kScaleGroupsPerStage = BLOCK_K / SF_GRAN;
+     constexpr uint32_t WAVE_BLOCK_M = BLOCK_M <= WGMMA::M ? BLOCK_M : WGMMA::M * 2;
+     DG_STATIC_ASSERT(BLOCK_M % WAVE_BLOCK_M == 0, "Invalid block sizes");
+@@ -210,9 +213,15 @@
+                     constexpr bool kWithGroupOffsetA = kGemmType == GemmType::MGroupedMasked;
+                     auto& full_barrier = *full_barriers[stage_idx];
+                     const uint32_t k_idx = k_block_idx * BLOCK_K;
+-                    tma::copy<BLOCK_K, BLOCK_M, kSwizzleAMode, __nv_fp8_e4m3, kIsBatchedMM>(&tensor_map_a, &full_barrier,
+-                             smem_a[stage_idx], k_idx, scheduler.get_global_idx<kWithGroupOffsetA>(shape_m, BLOCK_M, m_block_idx),
+-                             num_tma_multicast_a, batch_idx);
++                    if constexpr (kTokenMajorBatched) {
++                        tma::copy<BLOCK_K, BLOCK_M, kSwizzleAMode, __nv_fp8_e4m3, true>(
++                            &tensor_map_a, &full_barrier, smem_a[stage_idx], k_idx,
++                            batch_idx, 1, m_block_idx * BLOCK_M);
++                    } else {
++                        tma::copy<BLOCK_K, BLOCK_M, kSwizzleAMode, __nv_fp8_e4m3, kIsBatchedMM>(&tensor_map_a, &full_barrier,
++                                 smem_a[stage_idx], k_idx, scheduler.get_global_idx<kWithGroupOffsetA>(shape_m, BLOCK_M, m_block_idx),
++                                 num_tma_multicast_a, batch_idx);
++                    }
+                     tma::copy<BLOCK_M, kScaleGroupsPerStage, 0>(&tensor_map_sfa, &full_barrier,
+                              smem_sfa[stage_idx], m_block_idx * BLOCK_M, scheduler.template get_global_idx<kWithGroupOffsetA, sched::IndexType::SF_K>(shape_k_scales, 1, k_block_idx * kScaleGroupsPerStage),
+                              num_tma_multicast_a);
+@@ -469,6 +478,65 @@
+                 }
+             }
+
++            if constexpr (kQ8Rope) {
++                DG_STATIC_ASSERT(kGemmType == GemmType::Normal and BLOCK_N == 128 and kSwizzleDMode == 128,
++                                 "Q8 epilogue uses one full 128-byte TMA store per row");
++                constexpr uint32_t kHeadDim = 512;
++                constexpr uint32_t kRopeDim = 64;
++                constexpr uint32_t kWarpRows = WGMMA::M / 4;
++                if (not do_wgmma_store)
++                    continue;
++                if (threadIdx.x == 0)
++                    cute::tma_store_wait<0>();
++                cutlass::arch::NamedBarrier::sync(kNumWGMMAStoreThreads, 1);
++
++                const uint32_t tile_n = n_block_idx * BLOCK_N;
++                const uint32_t tile_m = m_block_idx * BLOCK_M;
++                const bool has_rope = tile_n % kHeadDim == kHeadDim - BLOCK_N;
++                const uint32_t row_in_warp = lane_idx / 4;
++                const uint32_t lane_col = (lane_idx % 4) * 2;
++                auto out = reinterpret_cast<uint8_t*>(smem_d);
++                #pragma unroll
++                for (uint32_t wave = 0; wave < BLOCK_M / WAVE_BLOCK_M; ++wave) {
++                    const uint32_t row0 = wave * WAVE_BLOCK_M + warp_idx * kWarpRows + row_in_warp;
++                    const uint32_t row1 = row0 + 8;
++                    const auto* values = final_accum + wave * WGMMA::kNumAccum;
++                    int64_t pos0 = 0, pos1 = 0;
++                    if (has_rope) {
++                        if (tile_m + row0 < shape_m)
++                            pos0 = q_positions[tile_m + row0];
++                        if (tile_m + row1 < shape_m)
++                            pos1 = q_positions[tile_m + row1];
++                    }
++                    #pragma unroll
++                    for (uint32_t i = 0; i < WGMMA::kNumAccum / 4; ++i) {
++                        const uint32_t col = i * 8 + lane_col;
++                        auto v0 = __bfloat1622float2(__float22bfloat162_rn({values[i * 4], values[i * 4 + 1]}));
++                        auto v1 = __bfloat1622float2(__float22bfloat162_rn({values[i * 4 + 2], values[i * 4 + 3]}));
++                        if (has_rope and i * 8 >= BLOCK_N - kRopeDim) {
++                            const uint32_t rope_col = col - (BLOCK_N - kRopeDim);
++                            const auto f0 = *reinterpret_cast<const float2*>(q_freqs + pos0 * kRopeDim + rope_col);
++                            const auto f1 = *reinterpret_cast<const float2*>(q_freqs + pos1 * kRopeDim + rope_col);
++                            v0 = __bfloat1622float2(__float22bfloat162_rn({v0.x * f0.x - v0.y * f0.y,
++                                                                         v0.x * f0.y + v0.y * f0.x}));
++                            v1 = __bfloat1622float2(__float22bfloat162_rn({v1.x * f1.x - v1.y * f1.y,
++                                                                         v1.x * f1.y + v1.y * f1.x}));
++                        }
++                        const uint32_t offset0 = row0 * BLOCK_N + (col ^ ((row0 % 8) * 16));
++                        const uint32_t offset1 = row1 * BLOCK_N + (col ^ ((row1 % 8) * 16));
++                        *reinterpret_cast<uint16_t*>(out + offset0) = __nv_cvt_float2_to_fp8x2(v0, __NV_SATFINITE, __NV_E4M3);
++                        *reinterpret_cast<uint16_t*>(out + offset1) = __nv_cvt_float2_to_fp8x2(v1, __NV_SATFINITE, __NV_E4M3);
++                    }
++                }
++                cute::tma_store_fence();
++                cutlass::arch::NamedBarrier::sync(kNumWGMMAStoreThreads, 1);
++                if (threadIdx.x == 0) {
++                    cute::SM90_TMA_STORE_2D::copy(&tensor_map_d, out, tile_n, tile_m);
++                    cute::tma_store_arrive();
++                }
++                continue;
++            }
++
+             // TMA checks
+             constexpr uint32_t kNumElemBytes = sizeof(nv_bfloat16);
+             constexpr uint32_t TMA_D_BLOCK_N = kSwizzleDMode == 0 ? BLOCK_N : (kSwizzleDMode / kNumElemBytes);
+@@ -545,7 +613,10 @@
+                 auto smem_ptr = smem_d + in_block_n_offset * BLOCK_M;
+                 auto n_idx = epilogue_op_t::apply_index_n<TMA_D_BLOCK_N>(n_block_idx * BLOCK_N + in_block_n_offset);
+                 auto m_idx = scheduler.get_global_idx<kWithGroupOffsetD>(shape_m, BLOCK_M, m_block_idx);
+-                if constexpr (kGemmType == GemmType::Batched) {
++                if constexpr (kTokenMajorBatched) {
++                    cute::SM90_TMA_STORE_3D::copy(&tensor_map_d, smem_ptr,
++                                                  n_idx, scheduler.current_group_idx, m_idx);
++                } else if constexpr (kGemmType == GemmType::Batched) {
+                     cute::SM90_TMA_STORE_3D::copy(&tensor_map_d, smem_ptr,
+                                                   n_idx, m_idx, scheduler.current_group_idx);
+                 } else {
+--- a/sgl_deep_gemm/build_ext.py
++++ b/sgl_deep_gemm/build_ext.py
+@@ -13,6 +13,7 @@
+     torch_dir = os.path.dirname(torch.__file__)
+     include_dirs = [
+         f'{cuda_home}/include',
++        '/usr/include/python3.12',
+         os.path.join(torch_dir, 'include'),
+         os.path.join(torch_dir, 'include', 'torch', 'csrc', 'api', 'include'),
+         os.path.join(root_dir, 'deep_gemm', 'include'),

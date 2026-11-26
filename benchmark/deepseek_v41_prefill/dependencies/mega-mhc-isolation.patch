@@ -1,0 +1,21 @@
+--- a/csrc/runtime/jit.hpp
++++ b/csrc/runtime/jit.hpp
+@@ -16,7 +16,7 @@
+     const auto include_dir = library_root / "include";
+     const auto config = deep_jit::Config(
+         library_root,
+-        "DG",
++        "DG521",
+         "cutlass-" + std::to_string(CUTLASS_VERSION),
+         {include_dir},
+         {"deep_gemm/"});
+--- a/setup.py
++++ b/setup.py
+@@ -25,6 +25,7 @@
+
+ # Compiler flags
+ cxx_flags = ['-std=c++20', '-O3', '-fPIC', '-Wno-psabi', '-Wno-deprecated-declarations',
++             '-fvisibility=hidden', '-fvisibility-inlines-hidden', '-fno-gnu-unique',
+              f'-D_GLIBCXX_USE_CXX11_ABI={int(torch.compiled_with_cxx11_abi())}']
+
+ # Sources

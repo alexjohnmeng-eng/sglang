@@ -1,0 +1,45 @@
+{
+  "dense": {
+    "base_revision": "b7f3816c7c0b3468303f198bcfa62eb20d98ee6f",
+    "patch": "dense-wqb-rope-multicast.patch",
+    "source_files_sha256": {
+      "csrc/apis/einsum.hpp": "9b69a7b80008120aa1138614e024aa01001a7f422d516c25b6cf70b74ff79f3f",
+      "csrc/jit_kernels/heuristics/sm90.hpp": "ef3ec998995ebf461d0580dd307a11d6af8511b2cec4b1f56634a9389c7e4d57",
+      "csrc/jit_kernels/impls/sm90_fp8_gemm_1d2d.hpp": "6c5d38848ac5d8268f6e72aadcf6c5125e7a708d02b405387719115ce1290277",
+      "csrc/torch_library_api.cpp": "05f06010276249f2c66b3c49ccd4ee1ef88ba376a6898e77a5cffe090393558c",
+      "deep_gemm/include/deep_gemm/impls/sm90_fp8_gemm_1d2d.cuh": "2ad476c633f9ce976285173a501a456114f45fc27f001e63618fc2d8812e6287",
+      "sgl_deep_gemm/build_ext.py": "2b1ea48d0538921a0790463fac9ccd285094c7f4f69510e779a98b46f6c1b0ee"
+    },
+    "tested_site": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/dense-multicast/site",
+    "binary_sha256": {
+      "deep_gemm/_C.so": "a225af5048055b3c7acdbee8df19fbab8abb5f83cfa35fff850b176746432a70"
+    }
+  },
+  "mega": {
+    "base_revision": "724a799bd04382732df8ba73611b4a2702879ac6",
+    "patch": "sm90-mxfp4-megamoe.patch",
+    "source_files_sha256": {
+      "csrc/jit_kernels/heuristics/sm90_fused_mega_moe.hpp": "fa09d35522833321042fdabfeab9792c453eedb63e28185637ec8200efce5539",
+      "csrc/runtime/jit.hpp": "ed57484b6ecbf9f531f40b753f987062d6c2dc34414081d42e97c4c5f10810ac",
+      "setup.py": "059640103938366324ed9d8a8afc757c0419adc804a221c1934bd482a66dc6e8"
+    },
+    "tested_site": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-20261124/upstream-20261125/deepgemm-473-prefill-tuning-site",
+    "binary_sha256": {
+      "deep_gemm_mega/_C.cpython-312-x86_64-linux-gnu.so": "bb91716ce7447668dc8b29995195bcd68d3cbd342d2d3f44d0e88de396bd26bb"
+    }
+  },
+  "mhc": {
+    "base_revision": "410ce17fb3cc117f0ebdeb8ca0808c5c9264b083",
+    "patch": "mega-mhc-isolation.patch",
+    "upstream_tar": "https://github.com/deepseek-ai/DeepGEMM/archive/410ce17fb3cc.tar.gz",
+    "tested_site": "/data1/fjmeng2/dsv41-runtime/repro/prefill-110k-local-20261125/mega-mhc-521/site",
+    "binary_sha256": {
+      "deep_gemm_mhc/_C.cpython-312-x86_64-linux-gnu.so": "3b03f5064df43409dc700e9d1a2b350b8a46bf16c70e8cc0d1f0d3c04284b4ee"
+    },
+    "source_files_sha256": {
+      "csrc/runtime/jit.hpp": "6dab17cfc7ab881736486bdf87de0a14ab5da9559bf643ccbeded742661fa737",
+      "setup.py": "059640103938366324ed9d8a8afc757c0419adc804a221c1934bd482a66dc6e8"
+    }
+  },
+  "placement_sha256": "335d76bcc4c5757d4874cd3e1332225054939f1b52c6c413295e81f1e7642ea5"
+}

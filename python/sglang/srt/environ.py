@@ -2171,6 +2171,8 @@ class Envs:
     # Run the prepared SM90 MXFP4 weights through FlashInfer's fused EP kernel.
     SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN = EnvBool(False)
     SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS = EnvInt(8192)
+    SGLANG_OPT_DSV41_CP8_EP8_PREFILL = EnvBool(False)
+    SGLANG_EXPERIMENT_DSV41_Q8_TMA_SWA = EnvBool(False)
     SGLANG_EXPERIMENT_DSV41_SM90_MEGAMOE_DEEPGEMM = EnvBool(False)
     # Requires the SM90 split-M staging fix for 16384 CP-local prefill rows.
     SGLANG_OPT_DSV41_SM90_MEGAMOE_16K_PREFILL = EnvBool(False)

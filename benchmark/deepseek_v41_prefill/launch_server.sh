@@ -21,6 +21,8 @@ fi
 export SGLANG_CACHE_DIR=/repro/cache
 export SGLANG_OPT_DSV41_SM90=1
 if [[ "${PREFILL_EP8_HISTORICAL:-0}" == 1 ]]; then
+  [[ "${PREFILL_EP_SIZE:-1}" == 8 ]] || { echo "Historical prefill requires EP8" >&2; exit 1; }
+  export SGLANG_OPT_DSV41_CP8_EP8_PREFILL=1
   export SGLANG_OPT_DSV41_FLASHINFER_SM90_RUN=1
   export SGLANG_OPT_DSV41_FLASHINFER_SM90_MAX_TOKENS=8192
 else

@@ -218,6 +218,7 @@ from sglang.srt.models.deepseek_common.utils import (
 from sglang.srt.models.deepseek_v4_cp_prefill import (
     CpMoeSymmTransport,
     bind_cp_moe_symm_transport,
+    cp8_ep8_prefill_enabled,
     cp_local_router_supported,
     cp_moe_symm_supported,
     cp_shard_input_embeds,
@@ -1905,7 +1906,8 @@ class MQALayer(MqaAttentionBase):
     ) -> torch.Tensor:
         """With ``row_plan.row_q`` the result is this rank's row slice with all heads."""
         if (
-            envs.SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE.get()
+            cp8_ep8_prefill_enabled()
+            and envs.SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE.get()
             and self.is_dsv41
             and self.attn_proj is not None
             and self.cp_prefill_symm
@@ -2059,7 +2061,8 @@ class MQALayer(MqaAttentionBase):
         finish_kv = None
         cp_shard_rows = 0
         if (
-            self.is_dsv41
+            cp8_ep8_prefill_enabled()
+            and self.is_dsv41
             and get_platform().is_sm90
             and get_parallel().attn_cp_size == 8
             and kv.shape[0] >= 2048
@@ -2084,7 +2087,8 @@ class MQALayer(MqaAttentionBase):
                 x=x,
                 forward_batch=forward_batch,
                 rank_major=(
-                    self.compressor.use_fused_gate
+                    cp8_ep8_prefill_enabled()
+                    and self.compressor.use_fused_gate
                     and attn_backend.cp_compressor_projects_local_rows
                     and attn_backend.forward_metadata.late_layer_tail is None
                     and forward_batch.batch_size == 1

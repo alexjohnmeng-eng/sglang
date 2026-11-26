@@ -390,3 +390,80 @@ python3 benchmark/deepseek_v41_prefill/compare_profiles.py \
 
 完整 GSM8K 与性能数据见 [OPTIMIZATION_PLAN.md](../../OPTIMIZATION_PLAN.md)。
 本目录只复现 prefill；decode 仍应另用 fake prefill 测试。
+
+## 合入后的配置隔离与 99.9K 复现
+
+`run.sh` 默认保留 EP1 / 16K chunk，生产参数不因历史 EP8 合入而自动改变。
+EP1 paired-W2 配方仍使用前文的 64K chunk、ntail、shared TP1、W2 pair layers 40，
+并可挂载 Mega mHC。DP8/EP8 decode 使用原 decode 参数，prefill 专用开关默认关闭。
+
+新增运行时开关 `SGLANG_OPT_DSV41_CP8_EP8_PREFILL=1` 还要求 CP8、EP8、
+attention-DP1、attention-TP1，才启用历史 rank-major KV/C2 与 CP-local MegaMoE。
+EP1 和 DP8/EP8 即使误开此开关，也不会选中该路径。WQB 融合另需原 WQB 开关。
+
+最高历史记录为 `megamoe-32k/`：64K **99922.39**、256K **97555.53 tok/s**，
+GSM8K **1282/1319**；其前一个两次 16K MoE 调用的版本为 99803.78/97538.67。
+它们都是 TP8/CP8/EP8、448 个 physical expert slots、256K chunk、memory .74、
+host Engram per_rank、cache off、串行请求/output1、10 warmups/5 repeats。
+历史最高数值不是新集成提交的测量结果，具体新结果见 OPTIMIZATION_PLAN.md。
+注意 `megamoe-32k` 是历史运行目录名；已核对其归档源码及 256K 的 GPU trace，
+实际使用 16384-row pool（32K local rows 分两次调用），不是 32768-row pool。
+后续 `megamoe-32k-v2/v3` 的实际 32K pool 尝试均因 early-combine bitmap 限制失败。
+本入口保留经过验证的 16K pool，不启用失败的 32K pool。
+
+完整启动、两档吞吐、16 份 profile、同一服务的全量 GSM8K 均由仓库内入口执行：
+
+```bash
+PREFILL_DENSE_MULTICAST=1 \
+PREFILL_OUTPUT=/data1/fjmeng2/dsv41-runtime/repro/choose-new-run-dir \
+bash benchmark/deepseek_v41_prefill/run_cp8_megamoe.sh 262144
+```
+
+GSM8K 在服务容器内使用 `/opt/sglang/bin/python3` 执行，EvalScope site 与数据集
+只读挂载，报告写 `/repro/results/gsm8k`，保证容器删除后结果仍可读取。
+`verify_gsm8k.py` 核对 1319 个唯一评测样本、execution_summary 与逐题分数。
+默认使用镜像内 FlashInfer 0.7.2；DeepGEMM MegaMoE 不要求 fi075 目录。
+如显式提供 `PREFILL_FLASHINFER_SITE`，manifest 单独记录并验证该可选依赖。
+
+所有定制 DeepGEMM 的源码 pin、patch、构建与哈希校验见
+[dependencies/README.md](dependencies/README.md)。本入口的外部 site 可以用
+`PREFILL_DEEPGEMM473_SITE`、`PREFILL_DENSE_DEEPGEMM_SITE`、`PREFILL_DEEPGEMM521_SITE`
+覆盖。三份定制包的修改都随提交保存在本目录，不能用 stock wheel 替代后仍称同一实验。
+
+离线验证时可设置 `PREFILL_REVISION` 为 `git write-tree` 生成的 tree，以便先测试暂存
+源码再提交；默认仍从 `HEAD` 导出。源码的逐文件 SHA256 与 source label 均归档，
+最终提交必须与经过测试的运行时代码一致。
+
+## DP8/EP8 decode 回归与全量 GSM8K
+
+CP8/EP8 迁移必须另外检查 attention-DP8/EP8。以下入口从 Git revision/tree
+导出不可变源码，依次启动 GSM8K、基线 decode、候选 decode；GPU 被占用时拒绝启动：
+
+```bash
+python3 benchmark/deepseek_v41_prefill/decode_regression/run.py \
+  --revision HEAD --baseline 82bebb1d34 \
+  --cases accuracy control candidate \
+  --output /data1/fjmeng2/dsv41-runtime/repro/choose-new-dp8ep8-run
+```
+
+只补跑精度可用 `--cases accuracy`。使用容器内 Python3.12，统一
+TP8/attention-DP8/EP8（当前版本 `dp_size=1, attn_dp_size=8`）、Humming FP8、
+Engram host per_rank、DSPARK block5、max_running256、decode graph32。
+GSM8K 使用非 PD 模式、真实 prefill、关闭接受率模拟、4-shot、temperature0、
+max_tokens2048、并发64、全量1319题。`accuracy/gsm8k-summary.json` 核对逐题分数、
+请求成功数和 prompt/target 哈希，`server_info.json` 与 runtime manifest 记录实际配置。
+
+decode 吞吐使用 PD decode 角色和 **fake prefill**：64×65536精确input_ids，
+1024输出，模拟接受率4.5，1轮预热/3轮测量；随后另采GPU-only的8-rank profile。
+此模拟接受率只用于吞吐测试，不用于GSM8K。`control`/`candidate` 的
+`timing/summary.json` 报告全请求都在decode区间中间70%的实测token速率，
+`profiles/gpu/` 保存kernel trace。不同配置或profile开销下的数值不能直接混比。
+
+完整迁移验证可一次运行（同一不可变源码，任一步失败立即退出）：
+
+```bash
+bash benchmark/deepseek_v41_prefill/validate_migration.sh \
+  /data1/fjmeng2/dsv41-runtime/repro/choose-new-migration-run HEAD
+```
+
+历史提交到当前配置的映射见 [MIGRATION.md](MIGRATION.md)。

@@ -26,11 +26,12 @@ export PREFILL_CONTAINER="${PREFILL_CONTAINER:-dsv41-cp8-$chunk-$run_id}"
 export PREFILL_CHUNK_SIZE="$chunk" PREFILL_ATTENTION_BACKEND=flashmla_sparse_q8
 export PREFILL_EP_SIZE=8 PREFILL_MEM_FRACTION=0.74
 export PREFILL_EP8_HISTORICAL=1
+export PREFILL_W2_PAIR_LAYERS=0
 export PREFILL_HUMMING_NTAIL=1 PREFILL_SHARED_TP1=1 PREFILL_WQB_Q8_ROPE=1
 export PREFILL_Q8_TMA_SWA="${PREFILL_Q8_TMA_SWA:-1}"
-export PREFILL_FLASHINFER_SITE="${PREFILL_FLASHINFER_SITE:-$runtime/fi075/site}"
-export PREFILL_EP_PLACEMENT="${PREFILL_EP_PLACEMENT:-$previous/routes-calibration-v1/placement-variable_copies.json}"
+export PREFILL_RUN_GSM8K=1
+export PREFILL_EP_PLACEMENT="${PREFILL_EP_PLACEMENT:-$tools/dependencies/placement-variable-copies.json}"
 export PREFILL_DEEPGEMM473_SITE="${PREFILL_DEEPGEMM473_SITE:-$previous/upstream-20261125/deepgemm-473-prefill-tuning-site}"
 export PREFILL_DENSE_DEEPGEMM_SITE="${PREFILL_DENSE_DEEPGEMM_SITE:-$dense/site}"
 export PREFILL_LONG_PROBE="${PREFILL_LONG_PROBE:-$previous/probe_long_prefill.py}"
-exec bash "$runtime/repro/prefill-plus20-20261124/run_prefill_with_gsm8k.sh" "$repo"
+exec bash "$tools/run.sh"

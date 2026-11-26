@@ -20,11 +20,23 @@ def union_us(events):
 
 
 def family(name):
+    if "humming<" in name:
+        shape = re.search(r"Shape<0u, (\d+)u, (\d+)u>", name)
+        if shape:
+            if int(shape[2]) == 5120:
+                return "Humming W13"
+            if int(shape[1]) == 5120:
+                return "Humming W2"
+        return "Humming other"
+    if "sm90_fp8_fused_mega_moe_impl" in name:
+        return "Fused MegaMoE (compute and communication)"
+    if "all_gather_pull_kernel" in name:
+        return "Custom all-gather pull (including synchronization)"
+    if "reduce_scatter_pull_kernel" in name:
+        return "Custom reduce-scatter pull (including synchronization)"
     for label, pattern in [
         ("CP barrier", "symmetric_memory::barrier_kernel"),
         ("Sparse attention", "sparse_attn_fwd"),
-        ("Humming W13", "humming<MmaOpClass, Shape<0u, 576u, 5120u>"),
-        ("Humming W2", "humming<MmaOpClass, Shape<0u, 5120u, 320u>"),
         ("DeepGEMM", "deep_gemm::"),
         ("mHC", "hc_"),
         ("Custom allreduce", "all_reduce_"),

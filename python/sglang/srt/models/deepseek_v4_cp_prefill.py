@@ -85,6 +85,18 @@ _MAX_SCALE_COLS = 4
 _LOCAL_ROUTER_WEIGHT_SHAPE = (384, 5120)
 
 
+def cp8_ep8_prefill_enabled() -> bool:
+    """Keep historical CP8 kernels out of EP1 and attention-DP decode."""
+    if not envs.SGLANG_OPT_DSV41_CP8_EP8_PREFILL.get():
+        return False
+    parallel = get_parallel()
+    return (
+        parallel.attn_cp_size == parallel.moe_ep_size == 8
+        and parallel.attn_dp_size == 1
+        and parallel.attn_tp_size == 1
+    )
+
+
 def _interleave_plan(
     *,
     local_rows: int,
@@ -337,7 +349,6 @@ def reduce_scatter_with_shared(
     shared: Optional[List[torch.Tensor]],
     rows: int,
     deferred: Optional["HummingDeferredMulSum"] = None,
-    local_shared: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """This rank's ``rows`` rows of the TP sum of ``routed + shared`` ([W * rows,
     hidden] partials on every rank): the MoE's ``routed += shared`` (one bf16
@@ -354,23 +365,17 @@ def reduce_scatter_with_shared(
 
         if deferred.pair_w2_used:
             assert shared is None
-            return comm.reduce_scatter_pair_w2(
-                rows, write_all, local_shared=local_shared
-            )
-        value = comm.reduce_scatter(rows, write_all=write_all)
-    else:
+            return comm.reduce_scatter_pair_w2(rows, write_all)
+        return comm.reduce_scatter(rows, write_all=write_all)
 
-        def write_rows(p: int, out: torch.Tensor) -> None:
-            partial = routed[p * rows : (p + 1) * rows]
-            if shared is None:
-                out.copy_(partial)
-            else:
-                torch.add(partial, shared[p], out=out)
+    def write_rows(p: int, out: torch.Tensor) -> None:
+        partial = routed[p * rows : (p + 1) * rows]
+        if shared is None:
+            out.copy_(partial)
+        else:
+            torch.add(partial, shared[p], out=out)
 
-        value = comm.reduce_scatter(rows, write_rows)
-    if local_shared is not None:
-        value.add_(local_shared)
-    return value
+    return comm.reduce_scatter(rows, write_rows)
 
 
 def _fp8_gather_cols(hidden: int) -> int:
@@ -541,6 +546,8 @@ class CpMoeSymmTransport(ComputeTransport):
     ) -> Optional[Tuple[torch.Tensor, torch.Tensor]]:
         rows = hidden_states.shape[0]
         route_rows = _LOCAL_ROUTER_ROWS.get((rows, get_parallel().attn_cp_size))
+        if rows in (16384, 32768) and not cp8_ep8_prefill_enabled():
+            route_rows = None
         if not (
             local_router
             and route_rows is not None
@@ -624,8 +631,9 @@ class CpMoeSymmTransport(ComputeTransport):
             shared=self._shared,
             rows=self.source_rows,
             deferred=self._deferred,
-            local_shared=self._local_shared,
         )
+        if self._local_shared is not None:
+            value.add_(self._local_shared)
         self._local_shared = self._shared = self._deferred = None
         return value
 
@@ -653,7 +661,8 @@ def bind_cp_moe_symm_transport(
         return None
     mlp = layer.mlp
     if (
-        getattr(mlp.experts, "_flashinfer_sm90_mxfp4_only", False)
+        cp8_ep8_prefill_enabled()
+        and getattr(mlp.experts, "_flashinfer_sm90_mxfp4_only", False)
         and parallel.attn_cp_size == parallel.moe_ep_size == 8
         and mlp._shared_expert_tp1
         and layer.cp_local_router

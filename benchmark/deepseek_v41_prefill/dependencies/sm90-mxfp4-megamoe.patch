@@ -1,0 +1,98 @@
+--- a/csrc/jit_kernels/heuristics/sm90_fused_mega_moe.hpp
++++ b/csrc/jit_kernels/heuristics/sm90_fused_mega_moe.hpp
+@@ -100,6 +100,13 @@
+ static constexpr int kSm90FusedLagRingMargin = 4;
+
+ static int get_auto_late_lag_sm90_fused(const int& num_max_tokens_per_rank, const int& num_topk, const int& num_experts_per_rank) {
++    if (num_max_tokens_per_rank >= 8192) {
++        const auto override = deep_jit::get_env<int>("DG_SM90_PREFILL_LAG", 0);
++        if (override != 0) {
++            DG_HOST_ASSERT(override >= kSm90FusedAutoLagMinUnits and override <= kSm90FusedAutoLagMaxUnits);
++            return override;
++        }
++    }
+     const int units_per_expert = std::max(1, (num_max_tokens_per_rank * num_topk + num_experts_per_rank * 1024 - 1) /
+                                              (num_experts_per_rank * 1024));
+     const int units = num_experts_per_rank * units_per_expert;
+@@ -729,9 +736,11 @@
+         return not ring_mode_pull or
+                n * num_sms * (num_dispatch_threads / 32) < (num_effective_ring_tokens / block_m - num_experts_per_rank - 1) * block_m;
+     };
+-    const bool pull_publish_rule_on = sm90_fused_rule_tokens_per_rank(num_tokens, num_tokens_bound) >= kSm90FusedPullPublishMinTokens and
+-        pull_publish_batch_fits_ring(kSm90FusedPullPublishBatch);
+-    const int pull_publish_batch = pull_publish_rule_on ? kSm90FusedPullPublishBatch : 1;
++    const bool large_prefill = sm90_fused_rule_tokens_per_rank(num_tokens, num_tokens_bound) >= kSm90FusedPullPublishMinTokens;
++    const int publish_batch = large_prefill
++        ? deep_jit::get_env<int>("DG_SM90_PREFILL_PULL_PUBLISH_BATCH", kSm90FusedPullPublishBatch) : 1;
++    DG_HOST_ASSERT(publish_batch >= 1 and publish_batch <= 256);
++    const int pull_publish_batch = pull_publish_batch_fits_ring(publish_batch) ? publish_batch : 1;
+     // Publish-batch bound (ring mode): a dispatch warp at pool block p waits for the L1 consumers of block p - R (R = ring blocks),
+     // which need every row of that block published. The kernel publishes a warp's pending rows before it blocks on a slot; this
+     // bound additionally keeps the batch's unpublished span (N x 264 / block_m + one partial tail block per expert) inside the ring.
+@@ -739,15 +748,6 @@
+         DG_HOST_ASSERT(pull_publish_batch_fits_ring(pull_publish_batch) &&
+                        "publish batch too large for the ring: a warp's pending rows could be needed by the ring slot it waits for");
+     }
+-    auto [num_stages, smem_size] = get_pipeline_config_sm90_fused(
+-        SM90ArchSpec::smem_capacity,
+-        num_experts, hidden, intermediate_hidden,
+-        block_m, block_n, block_k,
+-        num_dispatch_threads / 32, num_epilogue_threads / 32,
+-        use_swap_ab, /*half_l2_cd=*/false,
+-        0, tile_table_entries, l2_act_sf_gran_k, early_combine_fits_smem != 0, pull_publish_batch, mxfp4_weights,
+-        mxfp4_expanded_buffers);
+-
+     const bool split_phase_prefill =
+         block_m == 128 and block_n == 256 and hidden >= 4096;
+     bool half_l2_cd = false;
+@@ -759,18 +759,18 @@
+             get_weight_sf_floats_per_warpgroup_sm90_fused(hidden, intermediate_hidden, block_n) * static_cast<int>(sizeof(float));
+         l2_stage_mode = use_swap_ab ? 0 : (weight_sf_slot_bytes >= kSm90FusedStmatrixJunkSlotBytes ? 4 : 2);
+         l2_cd_passes = l2_stage_mode != 0 ? 4 : 2;
+-        const auto [ns_half, sz_half] = get_pipeline_config_sm90_fused(
+-            SM90ArchSpec::smem_capacity,
+-            num_experts, hidden, intermediate_hidden,
+-            block_m, block_n, block_k,
+-            num_dispatch_threads / 32, num_epilogue_threads / 32,
+-            use_swap_ab, /*half_l2_cd=*/true,
+-            l2_cd_passes, tile_table_entries, l2_act_sf_gran_k, early_combine_fits_smem != 0, pull_publish_batch,
+-            mxfp4_weights, mxfp4_expanded_buffers);
+         half_l2_cd = true;
+-        num_stages = ns_half;
+-        smem_size = sz_half;
+-    } else if (split_phase_prefill and num_stages < 3 and not mxfp4_weights) {
++    }
++    auto [num_stages, smem_size] = get_pipeline_config_sm90_fused(
++        SM90ArchSpec::smem_capacity,
++        num_experts, hidden, intermediate_hidden,
++        block_m, block_n, block_k,
++        num_dispatch_threads / 32, num_epilogue_threads / 32,
++        use_swap_ab, half_l2_cd,
++        l2_cd_passes, tile_table_entries, l2_act_sf_gran_k, early_combine_fits_smem != 0, pull_publish_batch,
++        mxfp4_weights, mxfp4_expanded_buffers);
++
++    if (not split_m2 and split_phase_prefill and num_stages < 3 and not mxfp4_weights) {
+         const auto [ns_half, sz_half] = get_pipeline_config_sm90_fused(
+             SM90ArchSpec::smem_capacity,
+             num_experts, hidden, intermediate_hidden,
+--- a/csrc/runtime/jit.hpp
++++ b/csrc/runtime/jit.hpp
+@@ -16,7 +16,7 @@
+     const auto include_dir = library_root / "include";
+     const auto config = deep_jit::Config(
+         library_root,
+-        "DG",
++        "DG473",
+         "cutlass-" + std::to_string(CUTLASS_VERSION),
+         {include_dir},
+         {"deep_gemm/"});
+--- a/setup.py
++++ b/setup.py
+@@ -25,6 +25,7 @@
+
+ # Compiler flags
+ cxx_flags = ['-std=c++20', '-O3', '-fPIC', '-Wno-psabi', '-Wno-deprecated-declarations',
++             '-fvisibility=hidden', '-fvisibility-inlines-hidden', '-fno-gnu-unique',
+              f'-D_GLIBCXX_USE_CXX11_ABI={int(torch.compiled_with_cxx11_abi())}']
+
+ # Sources

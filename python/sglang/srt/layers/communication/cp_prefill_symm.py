@@ -417,18 +417,23 @@ class CpPrefillSymm:
         local = self._pair_w2_bufs[self.rank][:routes]
         remote = self._pair_w2_bufs[peer][:routes]
         scale = torch.empty((routes, 1), dtype=torch.float32, device=gate_up.device)
-        store_gated_and_peak(gate_up, gated, self._pair_w2_peaks[self.rank], swiglu_limit)
+        store_gated_and_peak(
+            gate_up, gated, self._pair_w2_peaks[self.rank], swiglu_limit
+        )
         self._pair_w2_handle.barrier(channel=0)
         quantize_and_push_pair(
-            gated, self._pair_w2_peaks[left], self._pair_w2_peaks[left + 1],
-            local, remote, scale, self.rank % 2,
+            gated,
+            self._pair_w2_peaks[left],
+            self._pair_w2_peaks[left + 1],
+            local,
+            remote,
+            scale,
+            self.rank % 2,
         )
         self._pair_w2_handle.barrier(channel=1)
         return local, scale
 
-    def reduce_scatter_pair_w2(
-        self, rows: int, write_all, *, local_shared: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def reduce_scatter_pair_w2(self, rows: int, write_all) -> torch.Tensor:
         from sglang.kernels.ops.moe.dsv41_pair_w2 import sum_colored_slots
 
         assert self._reduce_bufs is not None and self.world_size == 8
@@ -437,9 +442,7 @@ class CpPrefillSymm:
         own = slice(self.rank * rows, (self.rank + 1) * rows)
         write_all([peer.view(-1, half_width)[own] for peer in self._reduce_bufs])
         self._handle.barrier(channel=_REDUCE_CHANNEL)
-        return sum_colored_slots(
-            self._reduce_bufs[self.rank], rows, self.width, shared=local_shared
-        )
+        return sum_colored_slots(self._reduce_bufs[self.rank], rows, self.width)
 
     def reduce_scatter(
         self,

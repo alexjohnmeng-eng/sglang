@@ -5,7 +5,8 @@ ulimit -c 0
 
 tools_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(git -C "$tools_dir" rev-parse --show-toplevel)
-source_revision=$(git -C "$repo_dir" rev-parse --verify "${PREFILL_REVISION:-HEAD}^{commit}")
+source_revision=$(git -C "$repo_dir" rev-parse --verify "${PREFILL_REVISION:-HEAD}^{tree}")
+source_label=$(git -C "$repo_dir" rev-parse --verify "${PREFILL_REVISION:-HEAD}")
 expected_image=sha256:f3a303d4028dc4597e312c96ada28fa19509f46559601a94e89dc630ac1ef152
 image=${PREFILL_IMAGE:-lmsysorg/sglang:latest}
 model=${PREFILL_MODEL_DIR:-/data1/fjmeng2/models/DeepSeek-V4.1-Flash-1017}
@@ -28,7 +29,7 @@ cp -a "$tools_dir/." "$output/tools/"
 git -C "$repo_dir" archive "$source_revision" > "$output/source.tar"
 tar -xf "$output/source.tar" -C "$output/source"
 rm "$output/source.tar"
-python3 "$output/tools/manifest.py" source "$output" "$source_revision"
+python3 "$output/tools/manifest.py" source "$output" "$source_label"
 git -C "$repo_dir" rev-parse HEAD > "$output/tools_revision.txt"
 git -C "$repo_dir" status --short > "$output/checkout_status.txt"
 if [[ "$mode" == --prepare-only ]]; then
@@ -89,6 +90,10 @@ experiment_args=(-e "SGLANG_EXPERIMENT_DSV41_Q8_TMA_SWA=${PREFILL_Q8_TMA_SWA:-0}
 if [[ "${PREFILL_DENSE_MULTICAST:-0}" == 1 ]]; then
   experiment_args+=( -e DG_DSV41_DENSE_MULTICAST=1 )
 fi
+if [[ -n "${PREFILL_EP_PLACEMENT:-}" ]]; then
+  [[ -f "$PREFILL_EP_PLACEMENT" ]] || { echo "Missing expert placement" >&2; exit 1; }
+  experiment_args+=(-v "$PREFILL_EP_PLACEMENT:/repro/ep-placement.json:ro")
+fi
 if [[ -n "${PREFILL_FLASHINFER_SITE:-}" ]]; then
   experiment_args+=( -v "$PREFILL_FLASHINFER_SITE:/repro/flashinfer:ro" )
 fi
@@ -111,6 +116,11 @@ if [[ -n "${PREFILL_DENSE_DEEPGEMM_SITE:-}" ]]; then
     -e "SGLANG_EXPERIMENT_DSV41_SM90_WQB_Q8_ROPE=${PREFILL_WQB_Q8_ROPE:-0}"
   )
 fi
+if [[ "${PREFILL_RUN_GSM8K:-0}" == 1 ]]; then
+  eval_site=${PREFILL_EVAL_SITE:-/data1/fjmeng2/dsv41-runtime/eval-pylibs}
+  eval_data=${GSM8K_DATASET_DIR:-/data1/fjmeng2/dsv41-runtime/datasets/gsm8k/main}
+  experiment_args+=(-v "$eval_site:/repro/eval-pylibs:ro" -v "$eval_data:/repro/gsm8k-data:ro")
+fi
 docker run -d --name "$container" --gpus all --ipc=host --network=host \
   --ulimit memlock=-1 --ulimit stack=67108864 --ulimit core=0 \
   --cap-add IPC_LOCK "${device_args[@]}" "${experiment_args[@]}" \
@@ -120,11 +130,9 @@ docker run -d --name "$container" --gpus all --ipc=host --network=host \
   -e PREFILL_HUMMING_NTAIL="${PREFILL_HUMMING_NTAIL:-0}" \
   -e PREFILL_EP_SIZE="${PREFILL_EP_SIZE:-1}" \
   -e PREFILL_EP8_HISTORICAL="${PREFILL_EP8_HISTORICAL:-0}" \
-  -e PREFILL_EP8_HISTORICAL="${PREFILL_EP8_HISTORICAL:-0}" \
   -e PREFILL_MEM_FRACTION="${PREFILL_MEM_FRACTION:-0.84}" \
   -e SGLANG_EXPERIMENT_DSV41_W2_PAIR_LAYERS="${PREFILL_W2_PAIR_LAYERS:-0}" \
   -e SGLANG_SHARED_EXPERT_TP1="${PREFILL_SHARED_TP1:-0}" \
-  -v "${PREFILL_EP_PLACEMENT:?}:/repro/ep-placement.json:ro" \
   -v "$model:/models/DeepSeek-V4.1-Flash-1017:ro" \
   -v "$output/source:/repro/source:ro" -v "$output/tools:/repro/tools:ro" \
   -v "$output:/repro/results" -v "$deps:/repro/deps:ro" \
@@ -144,4 +152,15 @@ python3 "$output/tools/bench.py" --base-url "http://127.0.0.1:$port" \
   --expected-ep-size "${PREFILL_EP_SIZE:-1}" \
   --expected-mem-fraction "${PREFILL_MEM_FRACTION:-0.84}" \
   2>&1 | tee "$output/client.log"
+if [[ "${PREFILL_RUN_GSM8K:-0}" == 1 ]]; then
+  docker exec -e PYTHONPATH=/repro/eval-pylibs "$container" /opt/sglang/bin/python3 \
+    /repro/eval-pylibs/bin/evalscope eval \
+    --model /models/DeepSeek-V4.1-Flash-1017 --model-id prefill-validation \
+    --api-url "http://127.0.0.1:$port/v1" --api-key EMPTY \
+    --eval-type openai_api --model-task text_generation --datasets gsm8k \
+    --dataset-args '{"gsm8k":{"local_path":"/repro/gsm8k-data","subset_list":["default"],"eval_split":"test"}}' \
+    --eval-batch-size 64 --generation-config '{"temperature":0.0,"max_tokens":2048,"timeout":1800}' \
+    --work-dir /repro/results/gsm8k --no-timestamp > "$output/gsm8k.log" 2>&1
+  python3 "$output/tools/verify_gsm8k.py" "$output/gsm8k" prefill-validation --summary "$output/gsm8k-summary.json"
+fi
 echo "Benchmark complete. Summary: $output/benchmark/summary.md"
