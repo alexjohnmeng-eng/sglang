@@ -847,3 +847,13 @@ DP8EP8吞吐使用decode角色、Mooncake配置和请求级 `bootstrap_host=2.2.
 仅执行静态/无服务检查：shell语法、Python AST、ruff lint/format、isort、diff whitespace、统一native源码pins/site单扩展哈希；三套 `--prepare-only` 源码及工具导出、4个服务模式（CP8EP8/CP8EP1/DP8EP8 decode与accuracy）的命令展开均通过。验证强制WQB=0、DP规范化参数、精度服务无PD/无模拟、四种旧site冲突提前拒绝。未启动模型、未占用GPU、未运行数据集。
 
 静态检查产物：`/data1/fjmeng2/dsv41-runtime/repro/h20-wqb-off-script-review-20261126T143141Z/summary.json`，脚本哈希、逐拓扑命令预览和环境展开日志在同目录；检查时源码tree `555b6b47c7418090d502b70418ce8c172c8ba6b4`，随后只补充文档/日志。此前实测保留在 `deepgemm-unified-20261126/`，其CP8EP8使用WQB融合；历史成绩不能挪用为关闭后的成绩。
+
+### 2026-11-27 CP8EP8 CPU+GPU attribution profile（仅采集 profile）
+
+针对 CP8EP8 prefill 重新采集带 CPU trace 的版本。测试使用 `perf/dsv41-h20` 当前脚本、统一 DeepGEMM site-v5、TP8/CP8 interleave/EP8、chunk262144、radix cache disabled、Engram host per_rank、Humming FP8 输入、WQB→RoPE→FP8 fusion disabled。新增 `bench.py` 的 `--profile-activities`、`--profile-with-stack`、`--profile-record-shapes`、`--profile-only` 选项；`run.sh` 通过 `PREFILL_PROFILE_*` 环境变量传入，避免 attribution profile 混入吞吐/GSM8K。
+
+命令：`PREFILL_PROFILE_ONLY=1 PREFILL_RUN_GSM8K=0 PREFILL_PROFILE_ACTIVITIES=CPU,GPU PREFILL_PROFILE_WITH_STACK=1 PREFILL_PROFILE_RECORD_SHAPES=1 PREFILL_PROFILE_TIMEOUT=1200 bash benchmark/deepseek_v41_prefill/run_h20.sh cp8ep8`。精确 seed42 input IDs 分别为 65536 和 262144，每个长度一个 profile request，均返回目标 prompt_tokens 且 cached_tokens=0；8 rank trace 全部完成。
+
+产物：`/data1/fjmeng2/dsv41-runtime/repro/h20-cp8ep8-cpu-trace-20261127T033629Z/`；`CPU_TRACE.md`、`cpu_trace_summary.json`、`benchmark/protocol.json` 和 `benchmark/profile_requests.json`。trace 压缩文件位于 `profiles/65536/`、`profiles/262144/`，每档8份，均包含 `python_function`、`cpu_op`、`kernel`、`cuda_runtime`、`cuda_driver` 和 `ac2g` 类别，元数据确认 `with_stack=true`、`record_shapes=true`。64K/256K trace事件中位数约179,218/255,432，trace span中位数约1,250.354/3,188.308 ms；分类累计时间存在重叠，只用于定位，不能作为wall time或吞吐成绩。
+
+本轮只生成 CPU+GPU attribution profile，没有重新测吞吐或 GSM8K，不声明性能收益。

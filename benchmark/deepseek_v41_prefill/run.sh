@@ -163,12 +163,26 @@ docker run -d --name "$container" --gpus all --ipc=host --network=host \
 owned_container=1
 docker inspect "$container" > "$output/container.json"
 docker exec "$container" nvidia-smi -q > "$output/nvidia-smi.txt"
+profile_args=(
+  --profile-activities "${PREFILL_PROFILE_ACTIVITIES:-GPU}"
+  --profile-timeout "${PREFILL_PROFILE_TIMEOUT:-300}"
+)
+if [[ "${PREFILL_PROFILE_WITH_STACK:-0}" == 1 ]]; then
+  profile_args+=(--profile-with-stack)
+fi
+if [[ "${PREFILL_PROFILE_RECORD_SHAPES:-0}" == 1 ]]; then
+  profile_args+=(--profile-record-shapes)
+fi
+if [[ "${PREFILL_PROFILE_ONLY:-0}" == 1 ]]; then
+  profile_args+=(--profile-only)
+fi
 python3 "$output/tools/bench.py" --base-url "http://127.0.0.1:$port" \
   --admin-key profile \
   --server-container "$container" \
   --wait-ready "${PREFILL_READY_TIMEOUT:-3600}" --output "$output/benchmark" \
   --profile-dir "$output/profiles" --server-profile-dir /repro/results/profiles \
   --lengths 65536 262144 --warmup 10 --repeat 5 \
+  "${profile_args[@]}" \
   --expected-chunk-size "${PREFILL_CHUNK_SIZE:-16384}" \
   --expected-attention-backend "${PREFILL_ATTENTION_BACKEND:-auto}" \
   --expected-ep-size "${PREFILL_EP_SIZE:-1}" \

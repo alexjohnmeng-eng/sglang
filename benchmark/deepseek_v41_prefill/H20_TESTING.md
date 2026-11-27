@@ -135,6 +135,25 @@ Decode 的完整脚本是 [run.py](decode_regression/run.py) +
 - 测时后另采 GPU-only profile，不纳入未 profile 的吞吐中位数。
 - 精度另启非 PD 服务、真实 prefill，清除接受率模拟，不发送 fake handoff 字段。
 
+如需对 CP8EP8 单独生成 CPU+GPU attribution trace（不运行吞吐和 GSM8K），使用：
+
+```bash
+PREFILL_OUTPUT="$PREFILL_RUNTIME_DIR/repro/h20-cp8ep8-cpu-trace-$(date -u +%Y%m%dT%H%M%SZ)" \
+PREFILL_PROFILE_ONLY=1 PREFILL_RUN_GSM8K=0 \
+PREFILL_PROFILE_ACTIVITIES=CPU,GPU PREFILL_PROFILE_WITH_STACK=1 \
+PREFILL_PROFILE_RECORD_SHAPES=1 PREFILL_PROFILE_TIMEOUT=1200 \
+  bash benchmark/deepseek_v41_prefill/run_h20.sh cp8ep8
+```
+
+该命令仍使用 CP8EP8 的完整启动参数和精确 64K/256K input IDs，每个长度只发送
+一个 profile 请求，profile 请求不计入吞吐。输出位于
+`profiles/{65536,262144}/`，包含八个 rank 的 `*.trace.json.gz`；CPU+stack trace
+只用于调用来源和 shape 定位，不能与 GPU-only trace 的 kernel 时间直接比较。
+
+`bench.py` 也支持 `--profile-activities CPU,GPU`、`--profile-with-stack`、
+`--profile-record-shapes` 和 `--profile-only`，对应的宿主机环境变量由
+`run.sh` 传入并记录在 `benchmark/protocol.json`。
+
 三套 GSM8K 均为 EvalScope 1.15.0、全量 test split **1319 题**、默认 4-shot、
 temperature0、max_tokens2048、并发64。完整 EvalScope 命令内嵌于上述 host 脚本，
 [verify_gsm8k.py](verify_gsm8k.py) 核对逐题分数、1319 个唯一样本、零请求错误、

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exact-token, cache-off prefill measurement and separate all-rank GPU profiles."""
+"""Exact-token, cache-off prefill measurement and all-rank attribution profiles."""
 
 import argparse
 import gzip
@@ -195,9 +195,9 @@ def profile(args, ids):
         "/start_profile",
         {
             "output_dir": str(server_dir),
-            "activities": ["GPU"],
-            "with_stack": False,
-            "record_shapes": False,
+            "activities": args.profile_activities,
+            "with_stack": args.profile_with_stack,
+            "record_shapes": args.profile_record_shapes,
         },
     )
     try:
@@ -267,6 +267,18 @@ def parse_args():
         "--server-container", help="Fail early if an owned Docker server exits"
     )
     parser.add_argument("--profile-timeout", type=float, default=300)
+    parser.add_argument(
+        "--profile-activities",
+        default="GPU",
+        help="Comma-separated profiler activities, e.g. CPU,GPU",
+    )
+    parser.add_argument("--profile-with-stack", action="store_true")
+    parser.add_argument("--profile-record-shapes", action="store_true")
+    parser.add_argument(
+        "--profile-only",
+        action="store_true",
+        help="Only issue one profile request per input length; skip warmup/samples",
+    )
     parser.add_argument("--expected-chunk-size", type=int, default=16384)
     parser.add_argument("--expected-attention-backend", default="auto")
     parser.add_argument("--expected-ep-size", type=int, default=1)
@@ -279,6 +291,18 @@ def parse_args():
     if args.server_profile_dir and not args.profile_dir:
         parser.error("--server-profile-dir requires --profile-dir")
     args.base_url = args.base_url.rstrip("/")
+    args.profile_activities = [
+        value.strip().upper()
+        for value in args.profile_activities.split(",")
+        if value.strip()
+    ]
+    if not args.profile_activities:
+        parser.error("--profile-activities cannot be empty")
+    invalid = set(args.profile_activities) - {"CPU", "GPU"}
+    if invalid:
+        parser.error(f"Unsupported profile activities: {sorted(invalid)}")
+    if args.profile_with_stack and "CPU" not in args.profile_activities:
+        parser.error("--profile-with-stack requires CPU activity")
     return args
 
 
@@ -300,9 +324,10 @@ def main():
             "temperature": 0,
             "ignore_eos": True,
             "concurrency": 1,
-            "profile_activities": ["GPU"],
-            "with_stack": False,
-            "record_shapes": False,
+            "profile_activities": args.profile_activities,
+            "with_stack": args.profile_with_stack,
+            "record_shapes": args.profile_record_shapes,
+            "profile_only": args.profile_only,
             "ttft_clock": "after JSON serialization until first token-bearing SSE event",
         },
     )
@@ -318,19 +343,23 @@ def main():
         ids = all_ids[:length]
         digest = hashlib.sha256(json.dumps(ids).encode()).hexdigest()
         call(args, "/flush_cache", {"timeout": 60})
-        for stage, count in (("warmup", args.warmup), ("sample", args.repeat)):
-            for iteration in range(count):
-                row = generate(args, ids)
-                row.update(stage=stage, iteration=iteration, input_sha256=digest)
-                print(json.dumps(row), flush=True)
-                with (root / "requests.jsonl").open("a") as log:
-                    log.write(json.dumps(row) + "\n")
-                if stage == "sample":
-                    rows.append(row)
-                    save(root / "measurements.json", rows)
-                    write_summary(root, rows, args)
+        if not args.profile_only:
+            for stage, count in (("warmup", args.warmup), ("sample", args.repeat)):
+                for iteration in range(count):
+                    row = generate(args, ids)
+                    row.update(stage=stage, iteration=iteration, input_sha256=digest)
+                    print(json.dumps(row), flush=True)
+                    with (root / "requests.jsonl").open("a") as log:
+                        log.write(json.dumps(row) + "\n")
+                    if stage == "sample":
+                        rows.append(row)
+                        save(root / "measurements.json", rows)
+                        write_summary(root, rows, args)
         if args.profile_dir:
-            print(f"Capturing GPU-only profile: {length} tokens", flush=True)
+            print(
+                f"Capturing {','.join(args.profile_activities)} profile: {length} tokens",
+                flush=True,
+            )
             row = profile(args, ids)
             row["input_sha256"] = digest
             profile_rows.append(row)
